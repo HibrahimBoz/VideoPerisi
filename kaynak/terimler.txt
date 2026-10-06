@@ -1,18 +1,215 @@
-# VideoHat Özel Terimler Sözlüğü (STT Doğruluğu İçin)
-# Satır başına bir terim veya ifade yazınız.
-# '#' ile başlayan satırlar yorum olarak değerlendirilir.
-türev
-integral
-algoritma
-API
-Python
-SQL
-derleyici
-yapay zeka
-makine öğrenimi
-vektör
-matris
-entegrasyon
-fonksiyon
-asenkron
-parametrik
+# VideoHat terim sözlüğü — elektronik harp (EH), radar, sinyal işleme, haberleşme
+# Bölümler: [istem] kısa öncelikli liste (Whisper'a ipucu; ~480 karakterde kesilir, en önemlisi başta)
+#           [bulanik] yabancı terimler: çıktıda yakın yazımlar buna düzeltilir (yalnız >=7 harfli tek sözcük)
+#           [duzeltme] yanlış => doğru (kesin kural; boşluk esnek, büyük/küçük harf duyarsız)
+# Kendi terimlerinizi ekleyin: istem'e en çok karışan 40-50 terimi, bulanik'e yabancı terimleri.
+
+[istem]
+elektronik harp
+ECM
+ESM
+ELINT
+SIGINT
+darbe
+pulse
+deinterleaving
+jammer
+chaff
+flare
+DRFM
+radar
+PRI
+PRF
+TOA
+AOA
+ECCM
+RWR
+emitter
+karıştırma
+aldatma
+yanıltma
+Doppler
+yan lob
+J/S
+FMCW
+AESA
+monopulse
+frekans atlamalı
+elektronik taarruz
+elektronik koruma
+elektronik destek
+tehdit kütüphanesi
+radar uyarı alıcısı
+darbe tekrarlama aralığı
+darbe genişliği
+PDW
+RGPO
+VGPO
+SNR
+DOA
+EIRP
+LPI
+
+[bulanik]
+# --- elektronik harp (İngilizce) ---
+deinterleaving
+interleaving
+interleaved
+jammer
+jamming
+jammers
+chaff
+flare
+flares
+emitter
+emitters
+spoofing
+barrage
+burn-through
+stand-off
+self-protection
+countermeasure
+countermeasures
+counter-countermeasure
+transponder
+decoy
+decoys
+spectrum
+waveform
+waveforms
+sidelobe
+sidelobes
+mainlobe
+antenna
+receiver
+transmitter
+superheterodyne
+heterodyne
+channelized
+wideband
+narrowband
+downconversion
+upconversion
+interferometer
+interferometry
+multilateration
+triangulation
+geolocation
+clustering
+histogram
+stagger
+# --- radar / sinyal işleme ---
+monopulse
+Doppler
+Nyquist
+Fourier
+Shannon
+Hilbert
+Gaussian
+Rayleigh
+Kalman
+beamforming
+beamwidth
+ambiguity
+polarization
+clutter
+multipath
+stealth
+
+[duzeltme]
+# Harf harf okunan / yanlış duyulan kısaltmalar
+e c m => ECM
+ee si em => ECM
+ey si em => ECM
+e ce em => ECM
+ec em => ECM
+e s m => ESM
+ee es em => ESM
+e s em => ESM
+e c c m => ECCM
+e ce ce em => ECCM
+r w r => RWR
+ar dabılyu ar => RWR
+d r f m => DRFM
+c aff => chaff
+dee ar ef em => DRFM
+p r i => PRI
+prl => PRI
+pe re i => PRI
+pe er i => PRI
+peverelli => PRI
+pe er ef => PRF
+pe re ef => PRF
+pevere-f => PRF
+p r f => PRF
+t o a => TOA
+a o a => AOA
+d o a => DOA
+s n r => SNR
+e w => EW
+elint => ELINT
+e-lint => ELINT
+e lint => ELINT
+sigint => SIGINT
+signit => SIGINT
+comint => COMINT
+komint => COMINT
+masint => MASINT
+rgpo => RGPO
+vgpo => VGPO
+cfar => CFAR
+fmcw => FMCW
+aesa => AESA
+pesa => PESA
+lpi => LPI
+# Türkçe harf adlarıyla okunan kısaltmalar (e=e, c=ce, s=se, m=me, r=re, p=pe, f=fe, d=de, t=te, n=ne, l=le)
+e ce me => ECM
+e se me => ESM
+e ce ce me => ECCM
+pe re fe => PRF
+te o a => TOA
+de o a => DOA
+de re fe me => DRFM
+re ve re => RWR
+le pe i => LPI
+se ne re => SNR
+# İngilizce harf adlarıyla okunan kısaltmalar
+pi ar ay => PRI
+pi ar ef => PRF
+el pi ay => LPI
+es en ar => SNR
+ti o ey => TOA
+dee o ey => DOA
+# Bölünmüş yazılan terimler
+kom int => COMINT
+com int => COMINT
+sig int => SIGINT
+el int => ELINT
+side lobe => sidelobe
+sidel obe => sidelobe
+main lobe => mainlobe
+burn throw => burn-through
+burn through => burn-through
+burn trough => burn-through
+bern through => burn-through
+# Yabancı terimlerin Türkçe ses okunuşu
+de interleaving => deinterleaving
+de-interleaving => deinterleaving
+de interliving => deinterleaving
+deinterliving => deinterleaving
+dinterliving => deinterleaving
+dei interleaving => deinterleaving
+cemmer => jammer
+jemmer => jammer
+ceymır => jammer
+cammer => jammer
+çaf => chaff
+şaff => chaff
+chaf => chaff
+fler => flare
+flayer => flare
+pals => pulse
+monopals => monopulse
+dopler => Doppler
+dopller => Doppler
+doplır => Doppler

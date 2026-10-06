@@ -29,7 +29,24 @@ Hangi paket?
      is\gunluk\       günlük                        Aynı içerik ikinci kez atılırsa "_yinelenen" olarak atlanır.
    Durdurmak: Ctrl+C.
 
-TÜRKÇE DOĞRULUĞU: terimler.txt dosyasına dersinizin terimlerini (satır başına bir tane) yazın;
+
+TERİM SÖZLÜĞÜ (terimler.txt) — Türkçe/İngilizce teknik terimlerin doğruluğu
+  Pakette elektronik harp (EH), radar ve sinyal işleme terimleri hazır gelir (darbe, pulse, deinterleaving, ECM, ESM,
+  ELINT, jammer, chaff, flare, DRFM, PRI, PRF, TOA, AOA...). Dosyayı Not Defteri ile açıp kendi terimlerinizi ekleyin.
+  Üç bölüm vardır:
+    [istem]     Whisper'a ipucu. Kısa tutun (~480 karakter sınırı, aşan terimler sessizce kesilir); EN ÇOK karışan
+                terimleri EN BAŞA yazın. Satır başına bir terim.
+    [bulanik]   Yabancı (İngilizce) terimler. Çıktıda yakın yazılışlar (jammıng -> jamming) buna düzeltilir.
+                Yalnız 7+ harfli tek sözcükler etkilenir. Türkçe sözcük KOYMAYIN (yanılma/yanıltma gibi
+                benzer gerçek sözcükleri bozar).
+    [duzeltme]  yanlış => doğru. Kesin kural. Harf harf okunan kısaltmalar (e c m, E-C-M, ee si em => ECM) ve
+                Türkçe okunuşlar (cemmer => jammer) için. Boşluk/tire esnektir, büyük-küçük harf duyarsızdır.
+  İpucu: bir videoyu işleyin, transkriptte yanlış yazılan terimi bulun, [duzeltme]'ye "yanlış yazım => doğru" ekleyin.
+  Aynı hata sonraki tüm videolarda otomatik düzelir. Düzeltilen sayı günlükte "Terim düzeltme: N değişiklik" görünür.
+  Ölçüm (sentetik Türkçe sesle, 2 EH paragrafı): terimsiz WER %10,3 / %13,5 -> sözlükle %2,3 / %9,5.
+  Sözlük yalnız istemle (düzeltmesiz) bazen kısaltmaları harf harf yazdırıp kötüleştirebilir; asıl kazanç [duzeltme].
+
+TÜRKÇE DOĞRULUĞU (kısa not): terimler.txt dosyasına dersinizin terimlerini (satır başına bir tane) yazın;
 Whisper'a ipucu olarak verilir. ayar.toml'dan model/ses/görüntü parametreleri değiştirilir.
 
 Ölçülen (RTX 3070 Laptop, 51 sn sentetik Türkçe ders): GPU large-v3 13 sn, WER %7,7; CPU medium int8 36 sn, WER %8,7.

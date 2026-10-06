@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import cihaz, cikti, goruntu, ses, yollar
+from . import cihaz, cikti, goruntu, ses, terimler as terimler_mod, yollar
 from .ayar import Ayar
 from .hatalar import UpscaleHatasi
 
@@ -70,18 +70,6 @@ def _video_akisi_var(video: Path) -> bool:
         return False
 
 
-def _terimleri_oku(ayar: Ayar) -> str:
-    yol = ayar.kok / ayar.stt.terimler_dosyasi
-    if not yol.is_file():
-        return ""
-    satirlar = []
-    for satir in yol.read_text(encoding="utf-8").splitlines():
-        satir = satir.strip()
-        if satir and not satir.startswith("#"):
-            satirlar.append(satir)
-    return ", ".join(satirlar)[:800]
-
-
 def _hata_metni(adim: str, hata: Exception) -> str:
     ayrinti = str(hata).strip()
     return f"{adim} adımında hata" + (f": {ayrinti}" if ayrinti else ".")
@@ -140,7 +128,8 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
             lambda: cihaz.sec(ayar, zorla_cihaz=bayraklar.cihaz, zorla_model=bayraklar.model),
         )
         sonuc.cihaz = secim.device
-        terimler = _terimleri_oku(ayar)
+        tm = terimler_mod.yukle(ayar.kok / ayar.stt.terimler_dosyasi)
+        terimler = tm.istem
 
         def stt_calistir():
             nonlocal secim
@@ -160,6 +149,9 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         from . import stt as stt_mod
         stt_yaz = stt_mod.yaz
         bolumler = olc("stt", stt_calistir)
+        duzeltme_sayisi = olc("terim_duzeltme", lambda: terimler_mod.uygula(bolumler, tm))
+        if duzeltme_sayisi:
+            gunluk.info("Terim düzeltme: %d değişiklik", duzeltme_sayisi)
 
         uzantilar = {
             ".srt": cikti.srt,
