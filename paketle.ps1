@@ -29,6 +29,13 @@ New-Item -ItemType Directory -Force (Join-Path $vh 'araclar') | Out-Null
 Copy-Item (Join-Path $proje 'kaynak\baslat\baslat.ps1') (Join-Path $vh 'araclar') -Force
 Copy-Item (Join-Path $proje 'kaynak\baslat\BASLAT.bat') $cikis -Force
 Copy-Item (Join-Path $proje 'kaynak\baslat\OKU-BENI.txt') $cikis -Force
+$surucu = Get-ChildItem (Join-Path $proje '_indir') -Filter '*-desktop-win10-win11-64bit-*-whql.exe' | Sort-Object Name | Select-Object -Last 1
+if ($surucu) {
+    $sd = Join-Path $cikis 'Surucu'
+    New-Item -ItemType Directory $sd | Out-Null
+    Copy-Item $surucu.FullName $sd
+    Copy-Item (Join-Path $proje 'kaynak\baslat\SURUCU-OKU-BENI.txt') $sd -Force
+} else { Write-Host 'UYARI: NVIDIA sürücüsü _indir\ içinde yok, pakete eklenmedi.' -ForegroundColor Yellow }
 
 Write-Host '[2/5] Kdenlive açılıyor...'
 $kd = Join-Path $cikis 'Kdenlive'

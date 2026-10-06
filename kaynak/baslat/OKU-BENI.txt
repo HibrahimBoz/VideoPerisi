@@ -8,6 +8,7 @@ KURULUM YOK. 7z dosyasını açın (örn. D:\VideoHat-Paketi) ve BASLAT.bat çif
   BASLAT.bat          menüyü açar: video seç / klasör seç / izleme / Kdenlive / test
   VideoHat\           transkript + ses/görüntü iyileştirme motoru (KULLANIM.txt içinde ayrıntı)
   Kdenlive\           Kdenlive 26.08.1 (taşınabilir; Kdenlive\...\bin\kdenlive.exe)
+  Surucu\             NVIDIA 616.92 sürücüsü (yalnız eski/yoksa; BASLAT.bat -> 7). Ayrıntı: Surucu\SURUCU-OKU-BENI.txt
 
 İLK ÇALIŞTIRMA
   BASLAT.bat → 5 (kendi kendine test) → "SONUÇ: GEÇTİ" görmelisiniz.
