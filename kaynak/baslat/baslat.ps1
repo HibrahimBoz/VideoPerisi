@@ -106,6 +106,7 @@ while ($true) {
     Write-Host '  0) Çıkış'
     Write-Host ''
     $s = Read-Host 'Seçiminiz'
+    if ($null -eq $s -or ([Console]::IsInputRedirected -and [string]::IsNullOrEmpty($s))) { exit 0 }   # girdi akışı kapandı (EOF): sonsuz döngüye girme
     switch ($s) {
         '1' { $g = Dosya-Sec; if ($g.Count) { Isle $g (Evet-Mi 'Ağır gürültü giderme (çok gürültülü kayıt)?') (Evet-Mi 'Görüntü iyileştirme?') }; Read-Host 'Devam için Enter' | Out-Null }
         '2' { $g = Klasor-Sec; if ($g.Count) { Isle $g (Evet-Mi 'Ağır gürültü giderme (çok gürültülü kayıt)?') (Evet-Mi 'Görüntü iyileştirme?') }; Read-Host 'Devam için Enter' | Out-Null }
