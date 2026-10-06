@@ -1,0 +1,23 @@
+[stt]
+gpu_model = "large-v3"
+cpu_model = "medium"
+beam_size = 5
+vad = true
+terimler_dosyasi = "terimler.txt"
+[ses]
+highpass_hz = 80
+afftdn_nf = -25
+lufs = -16.0
+tp = -1.5
+lra = 11
+agir_kuru_oran = 0.2
+[goruntu]
+etkin = false
+crf = 20
+nvenc = true
+[izle]
+yoklama_sn = 5
+sabit_tur = 3
+[genel]
+ara_dosya_sakla = false
+cpu_threads = 0

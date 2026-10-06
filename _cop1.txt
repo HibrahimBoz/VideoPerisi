@@ -1,0 +1,6 @@
+- `cihaz.py`: CUDA/CPU ve yerel model seçimi; zorlanan model bulunamazsa `OrtamHatasi`.
+- `stt.py`: Yerel faster-whisper modeliyle Türkçe transkripsiyon ve boş segmentleri eleme.
+- `hat.py`: Ses, transkripsiyon, çıktı ve mux adımları; belirtilen koşulda CPU’ya bir kez düşme.
+- Varsayım: CPU modeli yoksa kurulu modellerden biri seçilir; ffprobe başarısızsa “ses akışı yok” döndürülür.
+- Çalıştırma testi yapılamadı; PowerShell aracı engellendi.
+

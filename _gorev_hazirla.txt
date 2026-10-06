@@ -1,0 +1,70 @@
+GÖREV (yalnız dosya yaz, komut çalıştırma, derleme/koşum YOK): Windows PowerShell 5.1+/7 uyumlu `C:\Users\Halil\Documents\VideoHat\hazirla.ps1` ve yardımcı dosyaları yaz.
+Yanıtın kısa olsun: yazdığın dosyaların listesi + doğrulayamadığın varsayımlar.
+
+AMAÇ: İnternetli makinede bir kez çalışınca `dist\VideoHat-GPU\` ve `dist\VideoHat-CPU\` klasörlerini üretir. Bunlar kapalı ağa robocopy ile taşınır ve KURULUM gerektirmez (hedefte python/ffmpeg/pip/admin yok). Proje kökü = hazirla.ps1'in bulunduğu klasör ($PSScriptRoot). İndirilenler `_indir\` önbelleğine gider (zaten varsa atla = yeniden çalıştırılabilir/idempotent). Her adım başında Türkçe kısa log (`[n/10] ...`), hata olursa `throw` ve çıkış kodu 1. `$ErrorActionPreference='Stop'`. Büyük indirmede `Invoke-WebRequest` ilerleme çubuğunu kapat (`$ProgressPreference='SilentlyContinue'`).
+
+PAKET İÇİ DÜZEN (dist\VideoHat-GPU kök = %ROOT%):
+python\            embeddable Python 3.12.10 (https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip), içine python312._pth = kaynak\python312._pth kopyası
+python\Lib\site-packages\   pip ile --target kurulmuş paketler
+cuda\              cublas+cudnn DLL'leri (düz klasör) — YALNIZ GPU paketinde
+ffmpeg\bin\        ffmpeg.exe, ffprobe.exe (https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip içinden yalnız bin\*.exe)
+araclar\deep-filter.exe   (https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/deep-filter-0.5.6-x86_64-pc-windows-msvc.exe)
+araclar\realesrgan\       (https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip aç) — HATA OLURSA ATLA (uyarı yaz, kritik değil)
+modeller\large-v3\  modeller\medium\  modeller\turbo\   (CT2 modelleri; YALNIZ GPU paketinde large-v3 ve turbo; CPU paketinde yalnız medium)
+app\               kaynak\app\ içeriğinin kopyası (robocopy /MIR)
+ayar.toml, terimler.txt   kaynak\ayar.toml, kaynak\terimler.txt'ten
+calistir.bat izle.bat kontrol.bat   kaynak\bat\*.bat'tan
+is\gelen is\isleniyor is\bitti is\hata is\gunluk   boş klasörler
+SURUMLER.txt       sürümler + her büyük dosyanın SHA256'sı
+
+ADIMLAR:
+1. Ön kontrol: `py -3.13` veya `python` bulunur (pip için); yoksa anlamlı hata. İnternet erişimi testi (python.org'a HEAD).
+2. Embeddable Python'u indir, aç.
+3. Paketler (pip'siz hedefe, geliştirme makinesinin python'u koşar):
+   python -m pip install --target <hedef>\python\Lib\site-packages --python-version 3.12 --platform win_amd64 --implementation cp --only-binary=:all: faster-whisper==1.2.1 ctranslate2==4.8.2 "nvidia-cublas-cu12" "nvidia-cudnn-cu12==9.*"
+   (CPU paketinde nvidia-* HARİÇ.) Sonra `pip freeze --path <site-packages>` çıktısını SURUMLER.txt'e ekle.
+4. GPU paketinde: site-packages\nvidia\cublas\bin\*.dll ve site-packages\nvidia\cudnn\bin\*.dll → cuda\ ; sonra site-packages\nvidia sil.
+5. MSVC çalışma zamanı: $env:SystemRoot\System32'den msvcp140.dll, msvcp140_1.dll, msvcp140_2.dll, vcruntime140.dll, vcruntime140_1.dll, vcomp140.dll, concrt140.dll → python\ (olanları kopyala, olmayanı uyarıyla geç).
+6. ffmpeg indir/aç, yalnız bin\ffmpeg.exe ve ffprobe.exe al.
+7. Modeller: python ile huggingface_hub.snapshot_download — geliştirme makinesinde `huggingface_hub` yoksa `pip install huggingface_hub` (kullanıcı-site, hedef pakete DEĞİL). Repolar: Systran/faster-whisper-large-v3 (revision=edaa852e...: tam sha'yı API'den çöz, `HfApi().model_info(repo).sha` ile DEĞİL sabit verilen "edaa852e" önekini kullanıp tam sha'yı çözmeye çalış, olmazsa main'e düş ve SURUMLER'e gerçek sha'yı yaz), Systran/faster-whisper-medium (@08e178d4 aynı mantık), mobiuslabsgmbh/faster-whisper-large-v3-turbo (main; sha'yı yaz). local_dir=modeller\<ad>; `.cache` alt klasörünü sil. İndirme sonrası model.bin ve tokenizer.json (ve config.json) varlığını doğrula.
+8. araclar: deep-filter.exe indir; `deep-filter.exe --help` çıktısını SURUMLER.txt'e yaz (komut dışarıdan çalıştırılırsa hata alsa da devam et). Real-ESRGAN zip (hata → atla).
+9. app, ayar.toml, terimler.txt, bat dosyaları, boş is\ klasörleri; python312._pth.
+10. GPU paketi dist\VideoHat-GPU tam; CPU paketi aynısından cuda\, modeller\large-v3, modeller\turbo çıkarılmış hali (CPU paketine medium konur). İki paket için ayrı ayrı çalışsın: parametre `-Paket GPU|CPU|Ikisi` (varsayılan Ikisi) ve `-ModelAtla` anahtarı (hızlı deneme için model indirmeyi atlar). Ortak indirilenleri iki kez indirme (_indir önbelleği); paketleri robocopy ile kur.
+Sonda: SHA256 listesi + toplam boyut + "Hazır: dist\VideoHat-GPU, dist\VideoHat-CPU" yaz.
+
+ÇIKTI DOSYALARI (hepsini yaz):
+- hazirla.ps1
+- kaynak\python312._pth, içerik TAM olarak (satır satır):
+python312.zip
+.
+Lib\site-packages
+..\app
+import site
+- kaynak\bat\calistir.bat, izle.bat, kontrol.bat. Her biri: `@echo off`, `chcp 65001 >nul`, `set "ROOT=%~dp0"`, ortam: HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1, HF_HUB_DISABLE_TELEMETRY=1, PYTHONNOUSERSITE=1, PYTHONUTF8=1, VIDEOHAT_KOK=%ROOT%, `set "PATH=%ROOT%ffmpeg\bin;%ROOT%cuda;%ROOT%python;%SystemRoot%\System32;%SystemRoot%"`, sonra `"%ROOT%python\python.exe" -m videohat <alt>` : calistir.bat→`isle %*`, izle.bat→`izle`, kontrol.bat→`kontrol`. Çıkış kodunu `exit /b %errorlevel%` ile ilet; çift tıklamada pencere kapanmasın diye calistir.bat ve kontrol.bat sonunda `pause` (yalnız `%1` boşsa/etkileşimli değilse DEĞİL: basit tut — `if "%VIDEOHAT_PAUSE%"=="0" exit /b %errorlevel%` yoksa `pause`). Yol boşluk/Türkçe harf içerebilir: tüm yollar tırnaklı.
+- kaynak\ayar.toml, TAM şu içerikle:
+[stt]
+gpu_model = "large-v3"
+cpu_model = "medium"
+beam_size = 5
+vad = true
+terimler_dosyasi = "terimler.txt"
+[ses]
+highpass_hz = 80
+afftdn_nf = -25
+lufs = -16.0
+tp = -1.5
+lra = 11
+agir_kuru_oran = 0.2
+[goruntu]
+etkin = false
+crf = 20
+nvenc = true
+[izle]
+yoklama_sn = 5
+sabit_tur = 3
+[genel]
+ara_dosya_sakla = false
+cpu_threads = 0
+- kaynak\terimler.txt: satır başına bir terim, # yorum; örnek 10 terim (türev, integral, algoritma, API, Python, SQL, ...).
+
+KISIT: Başka dosyaya dokunma. Kaynak\app\ içine YAZMA (başkası yazıyor). Tüm yorumlar ve mesajlar Türkçe. Gizli anahtar/token gerekmez.

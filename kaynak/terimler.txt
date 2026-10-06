@@ -1,0 +1,18 @@
+# VideoHat Özel Terimler Sözlüğü (STT Doğruluğu İçin)
+# Satır başına bir terim veya ifade yazınız.
+# '#' ile başlayan satırlar yorum olarak değerlendirilir.
+türev
+integral
+algoritma
+API
+Python
+SQL
+derleyici
+yapay zeka
+makine öğrenimi
+vektör
+matris
+entegrasyon
+fonksiyon
+asenkron
+parametrik
