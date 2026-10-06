@@ -1,6 +1,7 @@
 # VideoHat kabul testleri a–h. Kullanım: pwsh -File testler.ps1 [-Paket dist\VideoHat-GPU]
 # Çıktı: tablo + testler_sonuc.json. Çıkış kodu: başarısız test sayısı.
 param(
+    [string[]]$Atla = @(),   # örn. -Atla cdeha,g  (c/d/e/h/a blokunu ve/veya g'yi atlar)
     [string]$Paket = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'dist\VideoHat-GPU')
 )
 $ErrorActionPreference = 'Continue'
@@ -54,6 +55,7 @@ $b = @('temiz.mp4', 'gurultulu.mp4', 'yarim.mp4', 'ref.wav') | ForEach-Object { 
 Kaydet 'b sentetik veri' (-not ($b -contains $false)) "4 dosya: $($b -join ',')"
 $sureTemiz = Sure (Join-Path $veri 'temiz.mp4')
 
+if ($Atla -notcontains 'cdeha') {
 # c: WER (+ d: loudness)
 $o1 = Join-Path $cikisKok 'temiz'
 $r = Isle $Paket (Join-Path $veri 'temiz.mp4') $o1
@@ -99,6 +101,7 @@ $kancaCalisiyor = ($kontrol -join ' ') -match 'PermissionError'
 if (Test-Path $gunluk) { Remove-Item $gunluk -Force }   # kontrol denemesinin kaydını sil
 Kaydet 'a ağ kapalı (ihlal=0, kanca doğrulandı)' ($n -eq 0 -and $kancaCalisiyor) "ihlal=$n, kanca PermissionError verdi: $kancaCalisiyor"
 
+}
 # f: izleme
 foreach ($d in 'gelen', 'isleniyor', 'bitti', 'hata') { Get-ChildItem (Join-Path $Paket "is\$d") -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
 Remove-Item (Join-Path $Paket 'is\durum.jsonl') -Force -ErrorAction SilentlyContinue
@@ -125,6 +128,7 @@ while ((Get-Date) -lt $bitis) {
     Start-Sleep 10
     $bitti = @(Get-ChildItem (Join-Path $Paket 'is\bitti') -Directory -ErrorAction SilentlyContinue).Count
     $kalan = @(Get-ChildItem $gelen -File).Count + @(Get-ChildItem (Join-Path $Paket 'is\isleniyor') -File).Count
+    Write-Host ("[izleme] {0:HH:mm:ss} gelen+isleniyor={1} bitti_dizin={2}" -f (Get-Date), $kalan, $bitti)
     if ($kalan -eq 0) { break }
 }
 Start-Sleep 5
@@ -136,6 +140,7 @@ $yinelenen = @($bittiAd | Where-Object { $_ -like '*yinelenen*' }).Count
 $isDizin = @(Get-ChildItem (Join-Path $Paket 'is\bitti') -Directory).Count
 Kaydet 'f izleme (3 iş, 1 yinelenen, 0 hata)' ($isDizin -eq 3 -and $yinelenen -eq 1 -and $hataSay -eq 0) "bitti=[$($bittiAd -join ', ')] hata=$hataSay"
 
+if ($Atla -notcontains 'g') {
 # g: taşınabilirlik
 $hedefPaket = Join-Path $env:TEMP 'Deneme Ğüş\VideoHat'
 if (Test-Path (Split-Path $hedefPaket)) { Remove-Item (Split-Path $hedefPaket) -Recurse -Force }
@@ -146,6 +151,7 @@ $kgKod = $LASTEXITCODE
 $ortamTemiz = -not (($ortam -join ' ') -match 'python\.exe|ffmpeg\.exe|py\.exe')
 Kaydet 'g taşınabilirlik (başka yol, Türkçe karakter, PATH temiz)' ($kgKod -eq 0 -and $ortamTemiz) "kontrol çıkış=$kgKod; sistem PATH'inde python/ffmpeg yok=$ortamTemiz"
 Remove-Item (Split-Path $hedefPaket) -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 $sonuclar | ConvertTo-Json | Set-Content (Join-Path $cikisKok 'testler_sonuc.json') -Encoding UTF8
 $kalan = @($sonuclar | Where-Object { -not $_.gecti }).Count

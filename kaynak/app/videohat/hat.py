@@ -152,6 +152,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
                 if secim.device != "cuda" or not any(k in mesaj for k in anahtarlar):
                     raise
                 gunluk.warning("CUDA belleği/çalıştırması yetersiz; CPU'ya düşüldü: %s", hata)
+                cihaz.cuda_kapat()
                 secim = cihaz.sec(ayar, zorla_cihaz="cpu", zorla_model=bayraklar.model)
                 sonuc.cihaz = secim.device
                 return stt_yaz(temiz16, secim, ayar, terimler)

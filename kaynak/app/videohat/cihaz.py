@@ -17,6 +17,15 @@ class CihazSecimi:
 
 _MODELLER = ("large-v3", "medium", "turbo")
 
+# CUDA yüklemesi bir kez başarısız olduysa aynı süreçte tekrar denenmez
+# (ctranslate2 bozuk CUDA durumunda ikinci denemede takılabiliyor).
+_cuda_kapali = False
+
+
+def cuda_kapat() -> None:
+    global _cuda_kapali
+    _cuda_kapali = True
+
 
 def gpu_bilgi() -> list[dict] | None:
     """nvidia-smi çıktısından GPU adını ve boş belleğini okur."""
@@ -77,6 +86,9 @@ def sec(
         raise OrtamHatasi(f"Geçersiz Whisper modeli: {zorla_model}")
     if zorla_cihaz not in (None, "cpu", "cuda"):
         raise OrtamHatasi(f"Geçersiz cihaz: {zorla_cihaz}")
+
+    if _cuda_kapali and zorla_cihaz is None:
+        zorla_cihaz = "cpu"
 
     if zorla_cihaz == "cpu":
         secilen_model = _var_olan_model(

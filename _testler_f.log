@@ -1,0 +1,74 @@
+[TAMAM] b sentetik veri: 4 dosya: True,True,True,True
+[TAMAM] c WER temiz (<=10): WER=8.7% sre=38.9s kod=0
+[TAMAM] d loudness (-16ñ1, TP<=-1): I=-16.1 LUFS TP=-1.5 dBFS
+[TAMAM] c WER grltl normal (<=15): WER=9.6%
+[TAMAM] c WER grltl a§r (<=15, normal+2): WER=11.5% normal=9.6% kod=0 
+[TAMAM] e CPU (WER<=18, sre<=1.5x): WER=8.7% sre=36.5s video=51.3s
+[TAMAM] e CPU cihaz ger‡ekten cpu: cihaz=cpu model=medium compute=int8
+[TAMAM] h GPU yede§i: atland (CPU paketi, cuda\ yok)
+[TAMAM] a a§ kapal (ihlal=0, kanca do§ruland): ihlal=0, kanca PermissionError verdi: True
+[izleme] 16:17:58 gelen+isleniyor=4 bitti_dizin=1
+[izleme] 16:18:08 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:18:18 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:18:28 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:18:38 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:18:48 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:18:58 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:08 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:18 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:28 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:38 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:48 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:19:58 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:08 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:18 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:28 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:38 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:48 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:20:58 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:08 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:18 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:28 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:38 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:48 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:21:58 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:08 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:18 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:49 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:22:59 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:09 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:19 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:49 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:23:59 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:09 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:19 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:49 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:24:59 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:09 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:19 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:49 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:25:59 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:09 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:19 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:49 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:26:59 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:27:09 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:27:19 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:27:29 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:27:39 gelen+isleniyor=3 bitti_dizin=2
+[izleme] 16:27:49 gelen+isleniyor=3 bitti_dizin=2
+[HATA ] f izleme (3 iŸ, 1 yinelenen, 0 hata): bitti=[ders1, ders2] hata=0
+[TAMAM] g taŸnabilirlik (baŸka yol, Trk‡e karakter, PATH temiz): kontrol ‡kŸ=0; sistem PATH'inde python/ffmpeg yok=True
+
+SONU€: 10/11 ge‡ti
+exit=1
