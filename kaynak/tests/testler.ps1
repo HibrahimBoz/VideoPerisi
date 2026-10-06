@@ -107,8 +107,10 @@ Start-Sleep 5
 $gelen = Join-Path $Paket 'is\gelen'
 Copy-Item (Join-Path $veri 'temiz.mp4') (Join-Path $gelen 'ders1.mp4')
 Copy-Item (Join-Path $veri 'gurultulu.mp4') (Join-Path $gelen 'ders2.mp4')
-# yavaş yazılan dosya (30 sn'de tamamlanır)
-$kaynak = [System.IO.File]::ReadAllBytes((Join-Path $veri 'temiz.mp4'))
+# yavaş yazılan dosya (30 sn'de tamamlanır); içerik ders1'den FARKLI olmalı (yinelenen sayılmasın)
+$ucuncu = Join-Path $veri 'ucuncu.mp4'
+& $ffmpeg -y -loglevel error -i (Join-Path $veri 'temiz.mp4') -af 'volume=0.7' -c:v copy -c:a aac $ucuncu
+$kaynak = [System.IO.File]::ReadAllBytes($ucuncu)
 $hedef = [System.IO.File]::Open((Join-Path $gelen 'ders3_yavas.mp4'), 'Create', 'Write', 'Read')
 $parca = [math]::Ceiling($kaynak.Length / 6)
 for ($i = 0; $i -lt 6; $i++) {

@@ -30,6 +30,8 @@ def _ffmpeg_calistir(komut: list[str]) -> subprocess.CompletedProcess:
         ayrinti = "\n".join(satirlar)
         mesaj = f"FFmpeg çalıştırma hatası:\n{ayrinti}" if ayrinti else "FFmpeg çalıştırma hatası."
         raise IsHatasi(mesaj) from hata
+    except OSError as hata:
+        raise IsHatasi(f"FFmpeg başlatılamadı: {hata}") from hata
 
 
 def cikar(video: Path, hedef_wav: Path, sr: int = 48000) -> None:

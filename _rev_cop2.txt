@@ -1,0 +1,5 @@
+- `kaynak/app/videohat/cihaz.py:64-65` — GPU belleği 1.8–3 GB iken `medium` ve `turbo` modelleri yok, yalnız `large-v3` varsa arama daha büyük modele döner; **bu girdi → düşük bellekli CUDA’da `large-v3` seçilir ve STT bellek hatasına düşebilir.**
+- `kaynak/app/videohat/hat.py:174-183` — JSON, `cikti` süresi tamamlanmadan ve sonraki adımlar çalışmadan yazıldığı için süreler eksik/eski kalır; **görüntülü girdi ve `goruntu=True` → JSON’da `mux`/`goruntu` süreleri bulunmaz ve `cikti` süresi JSON yazımını kapsamaz.**
+- `kaynak/app/videohat/hat.py:226-230` — Ara dosya silme başarısızlığı yakalandığında `basarili` değeri geri alınmıyor; **Windows’ta `_ara` içindeki dosya kilitliyken → `basarili=True` ve hata dolu bir sonuç döner.**
+- `kaynak/app/videohat/ses.py:17-28` — FFmpeg başlatılamadığında oluşan `OSError` `IsHatasi`’na çevrilmiyor; **mevcut fakat çalıştırılamayan `ffmpeg.exe` → `ses.cikar` ham `OSError` sızdırır, sözleşmedeki `IsHatasi` yerine.**
+

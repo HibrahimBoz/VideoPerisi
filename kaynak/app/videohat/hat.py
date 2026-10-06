@@ -171,15 +171,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         def ciktilari_yaz():
             for uzanti, yazici in uzantilar.items():
                 yazici(bolumler, cikti_yollari[uzanti])
-            sonuc.sureler["cikti"] = time.perf_counter() - cikti_baslangic
-            cikti.json_meta(
-                bolumler,
-                secim,
-                sonuc.sureler,
-                json_yolu,
-            )
 
-        cikti_baslangic = time.perf_counter()
         olc("cikti", ciktilari_yaz)
         cikti_dosyalari.extend(cikti_yollari.values())
         cikti_dosyalari.append(json_yolu)
@@ -223,11 +215,12 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
                     sonuc.sureler.setdefault("upscale", 0.0)
                     gunluk.warning("Upscale atlandı: %s", hata)
 
+        cikti.json_meta(bolumler, secim, sonuc.sureler, json_yolu)
         sonuc.basarili = True
         sonuc.cikti_dosyalari = cikti_dosyalari
         sonuc.hata = None
         if not ayar.genel.ara_dosya_sakla:
-            shutil.rmtree(ara)
+            shutil.rmtree(ara, ignore_errors=True)
         return sonuc
     except Exception as hata:
         sonuc.hata = _hata_metni("Video işleme", hata)
