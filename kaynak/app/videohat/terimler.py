@@ -91,9 +91,12 @@ def duzelt_metin(metin: str, tm: Terimler, _onbellek: dict | None = None) -> tup
     for desen, dogru in tm.kurallar:
         metin, n = desen.subn(dogru, metin)
         sayi += n
-    terimler = _onbellek.setdefault("terimler", _bulanik_hazirla(tm.sozluk)) if _onbellek is not None \
-        else _bulanik_hazirla(tm.sozluk)
-    onb = _onbellek.setdefault("sonuc", {}) if _onbellek is not None else {}
+    if _onbellek is None:
+        _onbellek = {}
+    if "terimler" not in _onbellek:
+        _onbellek["terimler"] = _bulanik_hazirla(tm.sozluk)
+        _onbellek["sonuc"] = {}
+    terimler, onb = _onbellek["terimler"], _onbellek["sonuc"]
 
     def degistir(m: re.Match) -> str:
         nonlocal sayi

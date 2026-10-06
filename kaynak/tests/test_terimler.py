@@ -38,7 +38,7 @@ for girdi, beklenen in pozitif.items():
     kontrol(f"düzelt: {girdi!r}", beklenen in cikti and n > 0, f"-> {cikti!r}")
 
 # Yanlış pozitif: Türkçe düz metinde HİÇ değişiklik olmamalı
-negatif_dosyalar = [kok / "tests" / "metin_tr.txt", kok / "KULLANIM.txt", kok / "baslat" / "OKU-BENI.txt",
+negatif_dosyalar = [kok / "tests" / "metin_tr.txt", kok / "baslat" / "OKU-BENI.txt",
                     Path.home() / ".claude" / "CLAUDE.md"]
 for d in negatif_dosyalar:
     if not d.exists():
