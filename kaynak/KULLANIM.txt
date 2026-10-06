@@ -1,0 +1,36 @@
+VideoHat — çevrimdışı Türkçe video transkript + ses/görüntü iyileştirme
+=======================================================================
+KURULUM YOK. Bu klasörü hedef makineye olduğu gibi kopyalayın (USB/robocopy). Python, ffmpeg,
+internet, yönetici yetkisi GEREKMEZ. Yol boşluk/Türkçe karakter içerebilir.
+
+Hangi paket?
+  VideoHat-GPU : NVIDIA kartlı makine (RTX 3060/3070...). large-v3 modeli, cuda\ DLL'leri içerir.
+                 Kart bulunamaz/yetersizse kendiliğinden CPU'ya düşer.
+  VideoHat-CPU : Kartsız/zayıf kartlı makine. medium modeli (int8). Daha yavaş (~0,7x gerçek süre, i7'de ölçüldü).
+
+1) İLK ÇALIŞTIRMA — kontrol.bat çift tıklayın. "SONUÇ: GEÇTİ" görmelisiniz (5 sn örnek ses ile uçtan uca test).
+
+2) TEK VİDEO / KLASÖR — calistir.bat dosyasının ÜSTÜNE video(lar)ı sürükleyin, ya da:
+     calistir.bat "D:\dersler\ders1.mp4"
+     calistir.bat "D:\dersler" --cikis "D:\cikti"
+   Çıktı (varsayılan: videonun yanında ders1_videohat\):
+     ders1.srt / .vtt / .txt / .json   transkript (zaman damgalı)
+     ders1_ses.mp4                      görüntü aynen, ses temizlenmiş + -16 LUFS
+     ders1_goruntu.mp4                  (yalnız --goruntu ile) hafif görüntü iyileştirme
+   Seçenekler:
+     --agir-ses     DeepFilterNet ile güçlü gürültü giderme (çok gürültülü kayıtlarda)
+     --goruntu      hqdn3d + eq + unsharp (hafif); tahta/ekran kaydında yazıyı bozmaz
+     --upscale      Real-ESRGAN x2 (isteğe bağlı, Vulkan ister; yazıyı bozabilir, önce küçük deneyin)
+     --model large-v3|medium|turbo     --cihaz cpu|cuda
+
+3) KLASÖR İZLEME — izle.bat çalıştırın, pencere açık kalsın. Videoları is\gelen\ klasörüne atın.
+   Dosya kopyalanması bitince otomatik işlenir (tek seferde bir iş).
+     is\bitti\<ad>\   sonuçlar (+ orijinal)        is\hata\<ad>\  hata.txt ile başarısızlar
+     is\gunluk\       günlük                        Aynı içerik ikinci kez atılırsa "_yinelenen" olarak atlanır.
+   Durdurmak: Ctrl+C.
+
+TÜRKÇE DOĞRULUĞU: terimler.txt dosyasına dersinizin terimlerini (satır başına bir tane) yazın;
+Whisper'a ipucu olarak verilir. ayar.toml'dan model/ses/görüntü parametreleri değiştirilir.
+
+Ölçülen (RTX 3070 Laptop, 51 sn sentetik Türkçe ders): GPU large-v3 13 sn, WER %7,7; CPU medium int8 36 sn, WER %8,7.
+Gürültü giderme transkripti bozmaz (WER ağır modda %7,7). Gerçek ders kaydında WER daha yüksek olabilir.

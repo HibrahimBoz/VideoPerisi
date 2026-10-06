@@ -556,6 +556,8 @@ print(f"MODEL_TAMAMLANDI:{resolved_sha}")
         # 7. ayar.toml ve terimler.txt
         Copy-Item -Path $ayarKaynak -Destination $PaketHedefYolu -Force
         Copy-Item -Path $terimlerKaynak -Destination $PaketHedefYolu -Force
+        $kilavuz = Join-Path $KaynakKlasoru "KULLANIM.txt"
+        if (Test-Path $kilavuz) { Copy-Item -Path $kilavuz -Destination $PaketHedefYolu -Force }
 
         # 8. calistir.bat, izle.bat, kontrol.bat köke kopyala
         Get-ChildItem -Path (Join-Path $batKaynak "*.bat") | ForEach-Object {
