@@ -1,6 +1,0 @@
-- **Yüksek — `kaynak/app/videohat/izle.py:33`** — Windows’ta var olan dosyayı kendisine `os.rename` etmek hedef zaten var diye hata verir; `gelen\video.mp4` sabit turlarını tamamladığında `_kilitli_mi` dosyayı kilitli sayar ve hiçbir zaman işleme kuyruğuna almaz.
-- **Yüksek — `kaynak/app/videohat/izle.py:112`** — Farklı uzantılı girdiler aynı gövde adına sahipse ikisi de aynı `bitti\<gövde>` klasörüne yazılır; örneğin `klip.mp4` ve `klip.mkv` için ikinci iş ilk işin `klip.srt/.vtt/.txt/.json` çıktılarını üzerine yazar.
-- **Orta — `kaynak/app/videohat/izle.py:18`** — Parmak izi orta kısmı hesaba katmadığı için boyutu ve ilk/son 1 MB’ı aynı, ortası farklı iki büyük dosya aynı parmak izini alır; ikinci dosya yinelenen sayılıp işlenmeden `bitti` klasörüne taşınır.
-- **Orta — `kaynak/app/videohat/goruntu.py:130, 173-186`** — `cikis` göreli bir yol olduğunda kare klasörleri mevcut çalışma dizinine göre oluşturulur, ancak Real-ESRGAN `cwd=re_exe.parent` ile çalışıp aynı göreli yolları araç klasörüne göre arar; örneğin `cikis=out.mp4` girdisi kareleri bulamayıp upscale işlemini başarısız kılar.
-- **Orta — `kaynak/app/videohat/ag_kilidi.py:18, 38-42`** — `127.` ile başlayan her metin loopback kabul edildiğinden `127.ornek.test` için `getaddrinfo` çağrısı engellenmez ve DNS sorgusu ağ kilidini aşarak dışarı çıkar.
-
