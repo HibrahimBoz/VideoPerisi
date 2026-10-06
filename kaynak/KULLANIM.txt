@@ -46,6 +46,12 @@ TERİM SÖZLÜĞÜ (terimler.txt) — Türkçe/İngilizce teknik terimlerin doğ
   Ölçüm (sentetik Türkçe sesle, 2 EH paragrafı): terimsiz WER %10,3 / %13,5 -> sözlükle %2,3 / %9,5.
   Sözlük yalnız istemle (düzeltmesiz) bazen kısaltmaları harf harf yazdırıp kötüleştirebilir; asıl kazanç [duzeltme].
 
+UZUN VİDEOLAR (saatlerce)
+  3 saatlik kayıt dahil sorunsuz çalışır: 20 dakikalık parçalarla (sessiz noktadan kesilerek) işlenir, bellek kullanımı
+  kayıt süresinden bağımsızdır (~3 GB). Ölçüm (RTX 3070 Laptop, large-v3): 3 saatlik ses 30 dk'da bitti (~6x gerçek zaman);
+  CPU'da (medium) yaklaşık 0,75x -> 3 saatlik video ~4 saat sürer. Günlükte "Transkript ilerleme: %N" ve "Parça i/n" görünür.
+  Geçici dosyalar videonun saati başına ~0,75 GB disk tutar (iş bitince silinir). İş yarıda kesilirse baştan başlar.
+
 TÜRKÇE DOĞRULUĞU (kısa not): terimler.txt dosyasına dersinizin terimlerini (satır başına bir tane) yazın;
 Whisper'a ipucu olarak verilir. ayar.toml'dan model/ses/görüntü parametreleri değiştirilir.
 
