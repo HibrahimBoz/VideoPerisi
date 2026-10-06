@@ -124,8 +124,8 @@ def iyilestir(
 
 def upscale(video: Path, cikis: Path, ayar: Ayar) -> None:
     """Videoyu karelere ayırır, Real-ESRGAN ile büyütür ve ses ile birleştirir."""
-    video = Path(video)
-    cikis = Path(cikis)
+    video = Path(video).resolve()
+    cikis = Path(cikis).resolve()
     ad = video.stem
     kare_dizini = cikis.parent / "_ara" / f"kareler_{ad}"
     giris_kareler = kare_dizini / "giris"

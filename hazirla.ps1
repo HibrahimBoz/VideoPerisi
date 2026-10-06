@@ -188,6 +188,7 @@ try {
                 '--only-binary=:all:',
                 'faster-whisper==1.2.1',
                 'ctranslate2==4.8.2',
+                'av<17',
                 'nvidia-cublas-cu12',
                 'nvidia-cudnn-cu12==9.*'
             )
@@ -213,7 +214,8 @@ try {
                 '--implementation', 'cp',
                 '--only-binary=:all:',
                 'faster-whisper==1.2.1',
-                'ctranslate2==4.8.2'
+                'ctranslate2==4.8.2',
+                'av<17'
             )
             Invoke-GelistiriciPython -PythonArgumanlari $cpuPipArgs
         } else {
@@ -332,8 +334,12 @@ try {
         Write-Host "  -> -ModelAtla anahtarı belirtildi, model indirme adımı atlandı." -ForegroundColor Yellow
     } else {
         # Geliştirme makinesinde huggingface_hub kontrolü
+        $oncekiEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         $hfCheck = & $hostPythonCmd ($hostPythonPrefixArgs + @('-c', 'import huggingface_hub')) 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $hfKod = $LASTEXITCODE
+        $ErrorActionPreference = $oncekiEAP
+        if ($hfKod -ne 0) {
             Write-Host "  -> huggingface_hub geliştirici makinesine kuruluyor (--user)..."
             & $hostPythonCmd ($hostPythonPrefixArgs + @('-m', 'pip', 'install', '--user', 'huggingface_hub'))
             if ($LASTEXITCODE -ne 0) {

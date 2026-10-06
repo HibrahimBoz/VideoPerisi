@@ -1,0 +1,495 @@
+İNCELEME (yalnız metin; hiçbir komut/araç çalıştırma, dosya yazma). Aşağıda _spec.md sözleşmesi ve üç modül var. Ara: sözleşmeden sapma, gerçek hata (cihaz seçim mantığı/ölü dallar, CPU yedeği, ara dosya temizliği, zaman ölçümü, istisna sızması, ses-only girdi), çevrimdışı çalışmayı bozan her şey. Her bulgu: dosya:satır, 1 cümle kusur, somut girdi→yanlış çıktı. Yalnız gerçek bulgular, stil yok, en çok 12, önem sırasıyla. Türkçe, kısa.
+
+=== _spec.md ===
+# VideoHat modül sözleşmesi (TÜM yazarlar bu imzalara uyar)
+
+Paket: `C:\Users\Halil\Documents\VideoHat\kaynak\app\videohat\`. Python 3.12 (embeddable, yalnız stdlib + faster-whisper/ctranslate2/av/onnxruntime/tokenizers/huggingface-hub). Başka paket YOK (numpy faster-whisper ile gelir; kullanma gerekmedikçe). Yorum/mesaj Türkçe. Mevcut dosyalar (DEĞİŞTİRME): `hatalar.py`, `yollar.py`, `ayar.py`, `__init__.py`, `__main__.py`.
+
+## Mevcut, kullanılacak API
+- `hatalar`: `VideoHatHatasi`, `AyarHatasi`, `OrtamHatasi`, `IsHatasi`, `UpscaleHatasi`
+- `yollar`: `kok()`, `ffmpeg()`, `ffprobe()`, `model_dizini(ad)->Path` (model.bin yoksa OrtamHatasi), `model_var_mi(ad)->bool`, `deep_filter()`, `realesrgan()`, `is_dizini(alt)`
+- `ayar`: `Ayar` dataclass: `.kok`, `.stt` (gpu_model, cpu_model, beam_size, vad, terimler_dosyasi), `.ses` (highpass_hz, afftdn_nf, lufs, tp, lra, agir_kuru_oran), `.goruntu` (etkin, crf, nvenc), `.izle`, `.genel` (ara_dosya_sakla, cpu_threads)
+
+## cihaz.py
+```python
+@dataclass
+class CihazSecimi:
+    device: str          # "cuda" | "cpu"
+    compute_type: str    # "float16" | "int8_float16" | "int8"
+    model_ad: str        # "large-v3" | "medium" | "turbo"
+    neden: str           # Türkçe kısa gerekçe (günlüğe)
+def gpu_bilgi() -> list[dict] | None      # nvidia-smi --query-gpu=memory.free,name --format=csv,noheader,nounits ; yoksa/hata None; dict: {"ad":str,"bos_mb":int}
+def sec(ayar: Ayar, zorla_cihaz: str|None=None, zorla_model: str|None=None) -> CihazSecimi
+```
+Kural: (1) `zorla_cihaz=="cpu"` → CPU. (2) cuda: `import ctranslate2; ctranslate2.get_cuda_device_count()==0` (import/DLL hatası dahil her istisna) → CPU. (3) CUDA var: boş bellek (nvidia-smi, ilk GPU): ≥5500 → ayar.stt.gpu_model + float16; 3000–5499 → gpu_model + int8_float16; 1800–2999 → "medium" + int8_float16; <1800 veya nvidia-smi okunamadı(None) → CPU (neden: bellek yetersiz/okunamadı). Seçilen modelin `yollar.model_var_mi` değilse sıradaki küçük modele düş (large-v3→medium), hiçbiri yoksa `OrtamHatasi`. (4) CPU: `ayar.stt.cpu_model`, compute_type "int8"; model yoksa başka bulunan modele düş. (5) `zorla_model` (large-v3|medium|turbo) verilmişse model adını ona sabitle (compute_type kuralı aynı kalır); model dizini yoksa OrtamHatasi. Her dönüşte `neden` dolu.
+
+## stt.py
+```python
+@dataclass
+class Segment: bas: float; son: float; metin: str
+def yaz(wav16: Path, secim: CihazSecimi, ayar: Ayar, terimler: str) -> list[Segment]
+```
+`WhisperModel(str(yollar.model_dizini(secim.model_ad)), device=secim.device, compute_type=secim.compute_type, cpu_threads=(ayar.genel.cpu_threads or fiziksel çekirdek ≈ os.cpu_count()//2 en az 1), num_workers=1)`. Model repo adı ASLA verilmez (yerel yol). `transcribe(str(wav16), language="tr", beam_size=ayar.stt.beam_size, vad_filter=ayar.stt.vad, vad_parameters={"min_silence_duration_ms":500}, condition_on_previous_text=False, initial_prompt=terimler or None, word_timestamps=False)`. Segment üreteci tüketilir (list). Boş/yalnız-boşluk metinleri at; metni `.strip()`. Hata sarmalama YOK (RuntimeError/OSError olduğu gibi yükselir; hat.py yakalar).
+
+## ses.py  (ffmpeg: `yollar.ffmpeg()`, subprocess, `check=True`, stderr yakala, `creationflags=CREATE_NO_WINDOW` Windows'ta, hata → IsHatasi(Türkçe + ffmpeg son 5 satır))
+```python
+def cikar(video: Path, hedef_wav: Path, sr: int = 48000) -> None   # -vn -ac 1 -ar sr pcm_s16le
+def temizle(wav_in: Path, wav_out: Path, agir: bool, ayar: Ayar) -> None
+def stt_icin(wav48: Path, wav16: Path) -> None                     # 16 kHz mono pcm_s16le
+def olc_lufs(wav: Path) -> float                                    # ebur128 Integrated LUFS (stderr ayrıştır); okunamazsa IsHatasi
+```
+`temizle` normal: `-af highpass=f={highpass_hz},afftdn=nf={afftdn_nf},loudnorm=I={lufs}:TP={tp}:LRA={lra}`. Ağır: önce `deep-filter.exe` (araç yolu `yollar.deep_filter()`; girdi 48 kHz mono wav; `-o <geçici dizin>`; çıktı dosyasını bul) sonra ham ile temiz çıktıyı `amix`/`volume` ile `agir_kuru_oran` kuru oranda karıştır (`[0]volume=1-oran[a];[1]volume=oran[b];[a][b]amix=inputs=2:normalize=0`), ardından aynı highpass+loudnorm. deep-filter yoksa/başarısızsa uyarı günlüğüne düş (`logging.getLogger("videohat")`) ve normal moda geç (hata fırlatma). Tek-geçiş loudnorm yeterli (iki geçiş YOK). Çıkış `wav_out` 48 kHz mono pcm_s16le.
+
+## cikti.py
+```python
+def srt(seg: list[Segment], yol: Path) -> None
+def vtt(seg: list[Segment], yol: Path) -> None
+def txt(seg: list[Segment], yol: Path) -> None
+def json_meta(seg: list[Segment], secim: CihazSecimi, sureler: dict[str,float], yol: Path) -> None
+```
+UTF-8 BOM'SUZ. SRT/VTT cue metni ≤42 karakter/satır, kelime sınırında en çok 2 satıra böl (daha uzunsa cue'yu zaman oranlı birden çok cue'ya böl). SRT zaman `HH:MM:SS,mmm`, VTT `HH:MM:SS.mmm` + `WEBVTT\n\n` başlığı. Zaman yuvarlama: `round(t*1000)` ms. json_meta: `{"cihaz","compute_type","model","neden","sureler","segment_sayisi","sure_sn"}` ensure_ascii=False.
+
+## goruntu.py
+```python
+def iyilestir(video: Path, temiz_wav: Path, cikis: Path, ayar: Ayar, nvenc: bool) -> None
+def upscale(video: Path, cikis: Path, ayar: Ayar) -> None
+```
+iyilestir: `-i video -i temiz_wav -map 0:v:0 -map 1:a:0 -vf "hqdn3d=1.5:1.5:6:6,eq=contrast=1.05:brightness=0.02:saturation=1.05,unsharp=5:5:0.5"`; nvenc True ve ffmpeg `-encoders`'ta h264_nvenc varsa VE `nvidia-smi` çalışıyorsa `-c:v h264_nvenc -cq {crf+1} -preset p5`, yoksa `-c:v libx264 -crf {crf} -preset medium`; `-c:a aac -b:a 192k -shortest -movflags +faststart -pix_fmt yuv420p`. upscale: kare PNG çıkar → `realesrgan-ncnn-vulkan -n realesrgan-x4plus -s 2` → yeniden birleştir (ses kopya); Vulkan/araç yoksa `UpscaleHatasi`; geçici kare dizini `cikis.parent/_ara/kareler_<ad>`, iş sonunda sil.
+
+## hat.py
+```python
+@dataclass
+class Bayraklar: agir_ses: bool=False; goruntu: bool=False; upscale: bool=False; model: str|None=None; cihaz: str|None=None
+@dataclass
+class Sonuc: ad: str; basarili: bool; hata: str|None; sureler: dict[str,float]; cikti_dosyalari: list[Path]; cihaz: str
+def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> Sonuc
+```
+Adımlar (her adım süresi `sureler[adim]` sn, `time.perf_counter`): `ses_cikar` (cikis_dir/_ara/ham48.wav) → `ses_temizle` (temiz48.wav) → `ses_16k` (temiz16.wav) → `cihaz_sec` → `stt` → `cikti` (`<ad>.srt/.vtt/.txt/.json`) → `mux` (ffmpeg: orijinal video `-c:v copy` + temiz ses AAC 192k → `<ad>_ses.mp4`, `-map 0:v:0 -map 1:a:0 -shortest`) → isteğe bağlı `goruntu` (`<ad>_goruntu.mp4`; Bayraklar.goruntu veya ayar.goruntu.etkin) → isteğe bağlı `upscale` (`<ad>_upscale.mp4`, UpscaleHatasi yutulur + uyarı). Terimler: `ayar.kok/ayar.stt.terimler_dosyasi` varsa oku, `#` ve boş satırları at, ", " ile birleştir, ≤800 karakterde kes; yoksa "". **Çalışma anı yedeği:** `stt.yaz` `RuntimeError/OSError` fırlatır ve mesajda ("cuda","cublas","cudnn","out of memory","memory") geçiyorsa (küçük harf) günlüğe "CPU'ya düşüldü" yaz, `cihaz.sec(ayar, zorla_cihaz="cpu", zorla_model=bayraklar.model)` ile **bir kez** yeniden dene. Adım hatası: `Sonuc(basarili=False, hata=<Türkçe>)` döner (istisna dışarı sızmaz); `_ara` klasörü hata durumunda KALIR, başarıda `ayar.genel.ara_dosya_sakla` False ise silinir. Video yoksa/okunamazsa (ffprobe `yollar.ffprobe()` ile ilk iş: ses akışı var mı) hata: "ses akışı yok". Günlük: `logging.getLogger("videohat")`.
+
+
+=== cihaz.py ===
+1: """Çalıştırma ortamına göre Whisper cihazı ve modelini seçer."""
+2: import subprocess
+3: from dataclasses import dataclass
+4: 
+5: from . import yollar
+6: from .ayar import Ayar
+7: from .hatalar import OrtamHatasi
+8: 
+9: 
+10: @dataclass
+11: class CihazSecimi:
+12:     device: str
+13:     compute_type: str
+14:     model_ad: str
+15:     neden: str
+16: 
+17: 
+18: _MODELLER = ("large-v3", "medium", "turbo")
+19: 
+20: 
+21: def gpu_bilgi() -> list[dict] | None:
+22:     """nvidia-smi çıktısından GPU adını ve boş belleğini okur."""
+23:     try:
+24:         sonuc = subprocess.run(
+25:             [
+26:                 "nvidia-smi",
+27:                 "--query-gpu=memory.free,name",
+28:                 "--format=csv,noheader,nounits",
+29:             ],
+30:             check=True,
+31:             capture_output=True,
+32:             text=True,
+33:             encoding="utf-8",
+34:             errors="replace",
+35:             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+36:         )
+37:         bilgiler = []
+38:         for satir in sonuc.stdout.splitlines():
+39:             bolumler = [parca.strip() for parca in satir.split(",", 1)]
+40:             if len(bolumler) != 2:
+41:                 return None
+42:             bilgiler.append({"ad": bolumler[1], "bos_mb": int(bolumler[0])})
+43:         return bilgiler or None
+44:     except Exception:
+45:         return None
+46: 
+47: 
+48: def _var_olan_model(tercih: str, sabit: bool = False) -> str:
+49:     if sabit:
+50:         if not yollar.model_var_mi(tercih):
+51:             raise OrtamHatasi(f"'{tercih}' modeli bulunamadı.")
+52:         return tercih
+53: 
+54:     if tercih not in _MODELLER:
+55:         tercih = "medium"
+56:     if tercih in _MODELLER:
+57:         baslangic = _MODELLER.index(tercih)
+58:         siralama = _MODELLER[baslangic:]
+59:     else:
+60:         siralama = ()
+61:     for ad in siralama:
+62:         if yollar.model_var_mi(ad):
+63:             return ad
+64:     for ad in _MODELLER:
+65:         if ad not in siralama and yollar.model_var_mi(ad):
+66:             return ad
+67:     raise OrtamHatasi("Kullanılabilir Whisper modeli bulunamadı.")
+68: 
+69: 
+70: def sec(
+71:     ayar: Ayar,
+72:     zorla_cihaz: str | None = None,
+73:     zorla_model: str | None = None,
+74: ) -> CihazSecimi:
+75:     """CUDA belleğine ve yerel model dosyalarına göre cihaz seçer."""
+76:     if zorla_model is not None and zorla_model not in _MODELLER:
+77:         raise OrtamHatasi(f"Geçersiz Whisper modeli: {zorla_model}")
+78:     if zorla_cihaz not in (None, "cpu", "cuda"):
+79:         raise OrtamHatasi(f"Geçersiz cihaz: {zorla_cihaz}")
+80: 
+81:     if zorla_cihaz == "cpu":
+82:         secilen_model = _var_olan_model(
+83:             zorla_model or ayar.stt.cpu_model,
+84:             sabit=zorla_model is not None,
+85:         )
+86:         return CihazSecimi(
+87:             "cpu",
+88:             "int8",
+89:             secilen_model,
+90:             "CPU zorlandı.",
+91:         )
+92: 
+93:     try:
+94:         import ctranslate2
+95: 
+96:         cuda_var = ctranslate2.get_cuda_device_count() > 0
+97:     except Exception:
+98:         cuda_var = False
+99: 
+100:     if cuda_var:
+101:         bilgiler = gpu_bilgi()
+102:         bellek = bilgiler[0]["bos_mb"] if bilgiler else None
+103:         if bellek is None or bellek < 1800:
+104:             cuda_var = False
+105:             cpu_neden = (
+106:                 "GPU belleği okunamadı; CPU kullanılıyor."
+107:                 if bellek is None
+108:                 else "GPU belleği yetersiz; CPU kullanılıyor."
+109:             )
+110:         elif bellek >= 5500:
+111:             compute_type = "float16"
+112:             gpu_model = ayar.stt.gpu_model
+113:         elif bellek >= 3000:
+114:             compute_type = "int8_float16"
+115:             gpu_model = ayar.stt.gpu_model
+116:         else:
+117:             compute_type = "int8_float16"
+118:             gpu_model = "medium"
+119: 
+120:     if cuda_var:
+121:         tercih = zorla_model or gpu_model
+122:         secilen_model = _var_olan_model(tercih, sabit=zorla_model is not None)
+123:         neden = f"CUDA seçildi; {bellek} MB boş bellek."
+124:         if secilen_model != tercih:
+125:             neden += f" Model dosyası bulunmadığından {secilen_model} kullanılıyor."
+126:         return CihazSecimi("cuda", compute_type, secilen_model, neden)
+127: 
+128:     cpu_neden = locals().get("cpu_neden", "CUDA kullanılamıyor; CPU seçildi.")
+129:     secilen_model = _var_olan_model(
+130:         zorla_model or ayar.stt.cpu_model,
+131:         sabit=zorla_model is not None,
+132:     )
+133:     neden = cpu_neden
+134:     if secilen_model != (zorla_model or ayar.stt.cpu_model):
+135:         neden += f" CPU modeli bulunmadığından {secilen_model} kullanılıyor."
+136:     return CihazSecimi("cpu", "int8", secilen_model, neden)
+
+=== stt.py ===
+1: """Yerel faster-whisper modeliyle Türkçe konuşma tanıma."""
+2: import os
+3: from dataclasses import dataclass
+4: from pathlib import Path
+5: 
+6: from . import yollar
+7: from .ayar import Ayar
+8: from .cihaz import CihazSecimi
+9: 
+10: 
+11: @dataclass
+12: class Segment:
+13:     bas: float
+14:     son: float
+15:     metin: str
+16: 
+17: 
+18: def yaz(
+19:     wav16: Path,
+20:     secim: CihazSecimi,
+21:     ayar: Ayar,
+22:     terimler: str,
+23: ) -> list[Segment]:
+24:     from faster_whisper import WhisperModel
+25: 
+26:     cpu_threads = ayar.genel.cpu_threads or max(1, (os.cpu_count() or 1) // 2)
+27:     model = WhisperModel(
+28:         str(yollar.model_dizini(secim.model_ad)),
+29:         device=secim.device,
+30:         compute_type=secim.compute_type,
+31:         cpu_threads=cpu_threads,
+32:         num_workers=1,
+33:     )
+34:     bolumler, _ = model.transcribe(
+35:         str(Path(wav16)),
+36:         language="tr",
+37:         beam_size=ayar.stt.beam_size,
+38:         vad_filter=ayar.stt.vad,
+39:         vad_parameters={"min_silence_duration_ms": 500},
+40:         condition_on_previous_text=False,
+41:         initial_prompt=terimler or None,
+42:         word_timestamps=False,
+43:     )
+44:     sonuc = []
+45:     for bolum in bolumler:
+46:         metin = bolum.text.strip()
+47:         if metin:
+48:             sonuc.append(Segment(float(bolum.start), float(bolum.end), metin))
+49:     return sonuc
+
+=== hat.py ===
+1: """VideoHat tek video işleme hattı."""
+2: import logging
+3: import shutil
+4: import subprocess
+5: import time
+6: from dataclasses import dataclass, field
+7: from pathlib import Path
+8: 
+9: from . import cihaz, cikti, goruntu, ses, yollar
+10: from .ayar import Ayar
+11: from .hatalar import UpscaleHatasi
+12: 
+13: 
+14: @dataclass
+15: class Bayraklar:
+16:     agir_ses: bool = False
+17:     goruntu: bool = False
+18:     upscale: bool = False
+19:     model: str | None = None
+20:     cihaz: str | None = None
+21: 
+22: 
+23: @dataclass
+24: class Sonuc:
+25:     ad: str
+26:     basarili: bool
+27:     hata: str | None
+28:     sureler: dict[str, float] = field(default_factory=dict)
+29:     cikti_dosyalari: list[Path] = field(default_factory=list)
+30:     cihaz: str = ""
+31: 
+32: 
+33: def _penceresiz() -> int:
+34:     return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+35: 
+36: 
+37: def _ses_akisi_var(video: Path) -> bool:
+38:     try:
+39:         sonuc = subprocess.run(
+40:             [
+41:                 str(yollar.ffprobe()),
+42:                 "-v", "error",
+43:                 "-select_streams", "a:0",
+44:                 "-show_entries", "stream=codec_type",
+45:                 "-of", "default=noprint_wrappers=1:nokey=1",
+46:                 str(video),
+47:             ],
+48:             check=True,
+49:             capture_output=True,
+50:             text=True,
+51:             encoding="utf-8",
+52:             errors="replace",
+53:             creationflags=_penceresiz(),
+54:         )
+55:         return bool(sonuc.stdout.strip())
+56:     except Exception:
+57:         return False
+58: 
+59: 
+60: def _video_akisi_var(video: Path) -> bool:
+61:     try:
+62:         sonuc = subprocess.run(
+63:             [str(yollar.ffprobe()), "-v", "error", "-select_streams", "v:0",
+64:              "-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1:nokey=1",
+65:              str(video)],
+66:             check=True, capture_output=True, text=True, encoding="utf-8",
+67:             errors="replace", creationflags=_penceresiz())
+68:         return bool(sonuc.stdout.strip())
+69:     except Exception:
+70:         return False
+71: 
+72: 
+73: def _terimleri_oku(ayar: Ayar) -> str:
+74:     yol = ayar.kok / ayar.stt.terimler_dosyasi
+75:     if not yol.is_file():
+76:         return ""
+77:     satirlar = []
+78:     for satir in yol.read_text(encoding="utf-8").splitlines():
+79:         satir = satir.strip()
+80:         if satir and not satir.startswith("#"):
+81:             satirlar.append(satir)
+82:     return ", ".join(satirlar)[:800]
+83: 
+84: 
+85: def _hata_metni(adim: str, hata: Exception) -> str:
+86:     ayrinti = str(hata).strip()
+87:     return f"{adim} adımında hata" + (f": {ayrinti}" if ayrinti else ".")
+88: 
+89: 
+90: def _ffmpeg_calistir(komut: list[str]) -> None:
+91:     try:
+92:         subprocess.run(
+93:             komut,
+94:             check=True,
+95:             capture_output=True,
+96:             text=True,
+97:             encoding="utf-8",
+98:             errors="replace",
+99:             creationflags=_penceresiz(),
+100:         )
+101:     except subprocess.CalledProcessError as hata:
+102:         satirlar = (hata.stderr or "").splitlines()[-5:]
+103:         ayrinti = "\n".join(satirlar)
+104:         raise RuntimeError(f"ffmpeg işlemi başarısız oldu.\n{ayrinti}".rstrip()) from hata
+105: 
+106: 
+107: def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> Sonuc:
+108:     video = Path(video)
+109:     cikis_dir = Path(cikis_dir)
+110:     ad = video.stem
+111:     sonuc = Sonuc(ad=ad, basarili=False, hata=None)
+112:     gunluk = logging.getLogger("videohat")
+113: 
+114:     if not _ses_akisi_var(video):
+115:         sonuc.hata = "ses akışı yok"
+116:         return sonuc
+117: 
+118:     ara = cikis_dir / "_ara"
+119:     cikti_dosyalari: list[Path] = []
+120:     try:
+121:         cikis_dir.mkdir(parents=True, exist_ok=True)
+122:         ara.mkdir(parents=True, exist_ok=True)
+123:         ham48 = ara / "ham48.wav"
+124:         temiz48 = ara / "temiz48.wav"
+125:         temiz16 = ara / "temiz16.wav"
+126: 
+127:         def olc(adim: str, islem):
+128:             baslangic = time.perf_counter()
+129:             try:
+130:                 return islem()
+131:             finally:
+132:                 sonuc.sureler[adim] = time.perf_counter() - baslangic
+133: 
+134:         olc("ses_cikar", lambda: ses.cikar(video, ham48))
+135:         olc("ses_temizle", lambda: ses.temizle(ham48, temiz48, bayraklar.agir_ses, ayar))
+136:         olc("ses_16k", lambda: ses.stt_icin(temiz48, temiz16))
+137: 
+138:         secim = olc(
+139:             "cihaz_sec",
+140:             lambda: cihaz.sec(ayar, zorla_cihaz=bayraklar.cihaz, zorla_model=bayraklar.model),
+141:         )
+142:         sonuc.cihaz = secim.device
+143:         terimler = _terimleri_oku(ayar)
+144: 
+145:         def stt_calistir():
+146:             nonlocal secim
+147:             try:
+148:                 return stt_yaz(temiz16, secim, ayar, terimler)
+149:             except (RuntimeError, OSError) as hata:
+150:                 mesaj = str(hata).lower()
+151:                 anahtarlar = ("cuda", "cublas", "cudnn", "out of memory", "memory")
+152:                 if secim.device != "cuda" or not any(k in mesaj for k in anahtarlar):
+153:                     raise
+154:                 gunluk.warning("CUDA belleği/çalıştırması yetersiz; CPU'ya düşüldü: %s", hata)
+155:                 secim = cihaz.sec(ayar, zorla_cihaz="cpu", zorla_model=bayraklar.model)
+156:                 sonuc.cihaz = secim.device
+157:                 return stt_yaz(temiz16, secim, ayar, terimler)
+158: 
+159:         from . import stt as stt_mod
+160:         stt_yaz = stt_mod.yaz
+161:         bolumler = olc("stt", stt_calistir)
+162: 
+163:         uzantilar = {
+164:             ".srt": cikti.srt,
+165:             ".vtt": cikti.vtt,
+166:             ".txt": cikti.txt,
+167:         }
+168:         cikti_yollari = {uzanti: cikis_dir / f"{ad}{uzanti}" for uzanti in uzantilar}
+169:         json_yolu = cikis_dir / f"{ad}.json"
+170: 
+171:         def ciktilari_yaz():
+172:             for uzanti, yazici in uzantilar.items():
+173:                 yazici(bolumler, cikti_yollari[uzanti])
+174:             sonuc.sureler["cikti"] = time.perf_counter() - cikti_baslangic
+175:             cikti.json_meta(
+176:                 bolumler,
+177:                 secim,
+178:                 sonuc.sureler,
+179:                 json_yolu,
+180:             )
+181: 
+182:         cikti_baslangic = time.perf_counter()
+183:         olc("cikti", ciktilari_yaz)
+184:         cikti_dosyalari.extend(cikti_yollari.values())
+185:         cikti_dosyalari.append(json_yolu)
+186: 
+187:         if not _video_akisi_var(video):
+188:             gunluk.info("Girdide görüntü yok; mux/görüntü adımları atlandı.")
+189:             goruntu_etkin = upscale_etkin = False
+190:         else:
+191:             goruntu_etkin = bayraklar.goruntu or ayar.goruntu.etkin
+192:             upscale_etkin = bayraklar.upscale
+193:             mux_yolu = cikis_dir / f"{ad}_ses.mp4"
+194:             ffmpeg = str(yollar.ffmpeg())
+195:             olc(
+196:                 "mux",
+197:                 lambda: _ffmpeg_calistir(
+198:                     [
+199:                         ffmpeg, "-y", "-i", str(video), "-i", str(temiz48),
+200:                         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+201:                         "-c:a", "aac", "-b:a", "192k", "-shortest", str(mux_yolu),
+202:                     ]
+203:                 ),
+204:             )
+205:             cikti_dosyalari.append(mux_yolu)
+206:             son_video = mux_yolu
+207:             if goruntu_etkin:
+208:                 goruntu_yolu = cikis_dir / f"{ad}_goruntu.mp4"
+209:                 olc(
+210:                     "goruntu",
+211:                     lambda: goruntu.iyilestir(
+212:                         mux_yolu, temiz48, goruntu_yolu, ayar, ayar.goruntu.nvenc
+213:                     ),
+214:                 )
+215:                 cikti_dosyalari.append(goruntu_yolu)
+216:                 son_video = goruntu_yolu
+217:             if upscale_etkin:
+218:                 upscale_yolu = cikis_dir / f"{ad}_upscale.mp4"
+219:                 try:
+220:                     olc("upscale", lambda: goruntu.upscale(son_video, upscale_yolu, ayar))
+221:                     cikti_dosyalari.append(upscale_yolu)
+222:                 except UpscaleHatasi as hata:
+223:                     sonuc.sureler.setdefault("upscale", 0.0)
+224:                     gunluk.warning("Upscale atlandı: %s", hata)
+225: 
+226:         sonuc.basarili = True
+227:         sonuc.cikti_dosyalari = cikti_dosyalari
+228:         sonuc.hata = None
+229:         if not ayar.genel.ara_dosya_sakla:
+230:             shutil.rmtree(ara)
+231:         return sonuc
+232:     except Exception as hata:
+233:         sonuc.hata = _hata_metni("Video işleme", hata)
+234:         sonuc.cikti_dosyalari = cikti_dosyalari
+235:         gunluk.error("%s: %s", ad, sonuc.hata)
+236:         return sonuc

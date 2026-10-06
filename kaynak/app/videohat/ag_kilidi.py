@@ -3,6 +3,7 @@
 Etkinleştirme: VIDEOHAT_AG_KILIDI=1 ortam değişkeni (python -m videohat başlarken kur() çağrılır).
 Loopback (127.0.0.0/8, ::1) ve Unix soketleri serbesttir.
 """
+import ipaddress
 import sys
 import time
 from pathlib import Path
@@ -15,7 +16,14 @@ def _loopback_mu(adres) -> bool:
         host = adres[0] if isinstance(adres, tuple) else adres
     except Exception:
         return False
-    return isinstance(host, str) and (host.startswith("127.") or host in ("::1", "localhost", ""))
+    if not isinstance(host, str):
+        return False
+    if host in ("localhost", ""):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def _yaz(olay: str, ayrinti) -> None:

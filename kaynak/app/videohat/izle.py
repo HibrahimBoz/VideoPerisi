@@ -16,21 +16,26 @@ log = logging.getLogger("videohat")
 
 
 def parmak_izi(yol: Path) -> str:
-    """sha1(boyut + ilk 1 MB + son 1 MB)."""
+    """sha1(boyut + ilk 1 MB + orta 1 MB + son 1 MB)."""
     boyut = yol.stat().st_size
     h = hashlib.sha1(str(boyut).encode())
+    mb = 1 << 20
     with open(yol, "rb") as f:
-        h.update(f.read(1 << 20))
-        if boyut > (1 << 20):
-            f.seek(max(0, boyut - (1 << 20)))
-            h.update(f.read(1 << 20))
+        h.update(f.read(mb))
+        if boyut > 2 * mb:
+            f.seek(boyut // 2 - mb // 2)
+            h.update(f.read(mb))
+        if boyut > mb:
+            f.seek(max(0, boyut - mb))
+            h.update(f.read(mb))
     return h.hexdigest()
 
 
 def _kilitli_mi(yol: Path) -> bool:
-    """Kopyalama sürüyorsa Windows aynı ada rename'e izin vermez."""
+    """Kopyalama sürüyorsa yazma amaçlı açış başarısız olur (Windows paylaşım kilidi)."""
     try:
-        os.rename(yol, yol)
+        with open(yol, "ab"):
+            pass
         return False
     except OSError:
         return True
@@ -109,7 +114,7 @@ def tek_tur(ayar: Ayar, gorulen: dict[Path, tuple[int, float, int]], bayrak: Bay
             continue
         calisan = _benzersiz(isleniyor, p.name)
         shutil.move(str(p), str(calisan))
-        cikis_kok = bitti / calisan.stem
+        cikis_kok = _benzersiz(bitti, calisan.stem)
         cikis_kok.mkdir(parents=True, exist_ok=True)
         log.info("İş başladı: %s", calisan.name)
         s = isle_tek(calisan, cikis_kok, ayar, bayrak)
