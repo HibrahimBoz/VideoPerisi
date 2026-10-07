@@ -37,6 +37,36 @@ if ($surucu) {
     Copy-Item (Join-Path $proje 'kaynak\baslat\SURUCU-OKU-BENI.txt') $sd -Force
 } else { Write-Host 'UYARI: NVIDIA sürücüsü _indir\ içinde yok, pakete eklenmedi.' -ForegroundColor Yellow }
 
+# SURUMLER.txt: gerçek dosyalardan (dist-info, commit_sha.txt) yeniden üretilir; hazirla.ps1'in eski çıktısı atılır
+$sp = Join-Path $vh 'python\Lib\site-packages'
+$pk = Get-ChildItem $sp -Directory -Filter '*.dist-info' | ForEach-Object {
+    $m = Get-Content (Join-Path $_.FullName 'METADATA') -TotalCount 12 -Encoding UTF8
+    $ad = ($m | Where-Object { $_ -like 'Name: *' } | Select-Object -First 1) -replace '^Name:\s*', ''
+    $sr = ($m | Where-Object { $_ -like 'Version: *' } | Select-Object -First 1) -replace '^Version:\s*', ''
+    "{0}=={1}" -f $ad, $sr
+} | Sort-Object
+$mod = foreach ($a in 'large-v3', 'medium', 'turbo') { "{0,-9}: {1}" -f $a, (Get-Content (Join-Path $vh "modeller\$a\commit_sha.txt") -Raw).Trim() }
+$sv = @"
+VideoHat paketi - bilesen listesi ($(Get-Date -Format 'yyyy-MM-dd'))
+Bu dosya paket olusturulurken gercek dosyalardan uretilmistir.
+
+YAZILIM KAYNAKLARI (tumu resmi yayinci kanallarindan indirilmistir)
+Python 3.12.10 embeddable : python.org (python-3.12.10-embed-amd64.zip)
+FFmpeg 9.0.2 essentials   : gyan.dev (ffmpeg-release-essentials.zip), GPLv3 derlemesi
+DeepFilterNet v0.5.6      : github.com/Rikorose/DeepFilterNet (deep-filter-0.5.6-x86_64-pc-windows-msvc.exe) [istege bagli: --agir-ses]
+Real-ESRGAN ncnn-vulkan   : github.com/xinntao/Real-ESRGAN (v0.2.5.0, realesrgan-ncnn-vulkan-20220424-windows.zip) [istege bagli: --upscale]
+Kdenlive 26.08.1          : download.kde.org (kdenlive-26.08.1_standalone.exe), GPLv3
+NVIDIA surucusu 616.92    : us.download.nvidia.com (Surucu\ klasoru, istege bagli)
+Whisper CT2 modelleri     : huggingface.co - Systran/faster-whisper-large-v3, Systran/faster-whisper-medium, mobiuslabsgmbh/faster-whisper-large-v3-turbo
+
+MODEL COMMIT SHA
+$($mod -join "`r`n")
+
+PYTHON PAKETLERI (site-packages)
+$($pk -join "`r`n")
+"@
+Set-Content -Path (Join-Path $vh 'SURUMLER.txt') -Value $sv -Encoding UTF8
+
 Write-Host '[2/5] Kdenlive açılıyor...'
 $kd = Join-Path $cikis 'Kdenlive'
 & $SevenZip x $kdExe.FullName "-o$kd" -y -bso0 -bsp0
