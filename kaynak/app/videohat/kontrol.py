@@ -97,7 +97,7 @@ def calistir() -> int:
     except Exception as e:  # noqa: BLE001
         ekle("ağ ihlali", False, str(e))
 
-    print("\n=== VideoHat kontrol ===")
+    print("\n=== Video Perisi kontrol ===")
     for ad, tamam, ayrinti in satirlar:
         print(f"[{'TAMAM' if tamam else 'HATA '}] {ad}: {ayrinti}")
     gecti = all(t for _, t, _ in satirlar)

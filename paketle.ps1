@@ -1,4 +1,4 @@
-# Aktarım paketi: dist\VideoHat-Paketi (VideoHat + Kdenlive + BASLAT.bat) ve 7z arşivi üretir.
+# Aktarım paketi: dist\VideoPerisi-Paketi (VideoPerisi + Kdenlive + BASLAT.bat) ve 7z arşivi üretir.
 # Önce hazirla.ps1 çalışmış, _indir\kdenlive-*_standalone.exe indirilmiş olmalı.
 param(
     [string]$SevenZip = 'C:\Program Files\7-Zip\7z.exe',
@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $proje = $PSScriptRoot
 $gpu = Join-Path $proje 'dist\VideoHat-GPU'
-$cikis = Join-Path $proje 'dist\VideoHat-Paketi'
+$cikis = Join-Path $proje 'dist\VideoPerisi-Paketi'
 $kdExe = Get-ChildItem (Join-Path $proje '_indir') -Filter 'kdenlive-*_standalone.exe' | Sort-Object Name | Select-Object -Last 1
 if (-not (Test-Path $gpu)) { throw "GPU paketi yok: $gpu (önce hazirla.ps1)" }
 if (-not $kdExe) { throw "Kdenlive standalone .exe _indir\ içinde yok." }
@@ -20,7 +20,7 @@ if (-not $KlasorHazir) {
 Write-Host '[1/5] Klasör hazırlanıyor...'
 if (Test-Path $cikis) { Remove-Item $cikis -Recurse -Force }
 New-Item -ItemType Directory $cikis | Out-Null
-$vh = Join-Path $cikis 'VideoHat'
+$vh = Join-Path $cikis 'VideoPerisi'
 robocopy $gpu $vh /E /NFL /NDL /NJH /NJS /NP /XD (Join-Path $gpu 'is') | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy hatası (kod $LASTEXITCODE)" }
 foreach ($d in 'gelen', 'isleniyor', 'bitti', 'hata', 'gunluk') { New-Item -ItemType Directory -Force (Join-Path $vh "is\$d") | Out-Null }
@@ -47,7 +47,7 @@ $pk = Get-ChildItem $sp -Directory -Filter '*.dist-info' | ForEach-Object {
 } | Sort-Object
 $mod = foreach ($a in 'large-v3', 'medium', 'turbo') { "{0,-9}: {1}" -f $a, (Get-Content (Join-Path $vh "modeller\$a\commit_sha.txt") -Raw).Trim() }
 $sv = @"
-VideoHat paketi - bilesen listesi ($(Get-Date -Format 'yyyy-MM-dd'))
+Video Perisi paketi - bilesen listesi ($(Get-Date -Format 'yyyy-MM-dd'))
 Bu dosya paket olusturulurken gercek dosyalardan uretilmistir.
 
 YAZILIM KAYNAKLARI (tumu resmi yayinci kanallarindan indirilmistir)
@@ -79,8 +79,8 @@ $boyut = (Get-ChildItem $cikis -Recurse -File | Measure-Object Length -Sum).Sum 
 }
 if ($SadeceKlasor) { Write-Host "Klasör hazır: $cikis"; return }
 Write-Host '[4/5] 7z sıkıştırılıyor (birkaç dakika-yarım saat)...'
-$arsiv = Join-Path $proje 'dist\VideoHat-Paketi.7z'
-Get-ChildItem (Join-Path $proje 'dist') -Filter 'VideoHat-Paketi.7z*' | Remove-Item -Force
+$arsiv = Join-Path $proje 'dist\VideoPerisi-Paketi.7z'
+Get-ChildItem (Join-Path $proje 'dist') -Filter 'VideoPerisi-Paketi.7z*' | Remove-Item -Force
 $a = @('a', '-t7z', "-mx=$Sikistirma", '-mmt=on', '-bso0', '-bsp0', $arsiv, $cikis)
 if ($ParcaBoyutu) { $a += "-v$ParcaBoyutu" }
 & $SevenZip @a
@@ -91,6 +91,6 @@ $ilk = if ($ParcaBoyutu) { "$arsiv.001" } else { $arsiv }
 & $SevenZip t $ilk -bso0 -bsp0
 if ($LASTEXITCODE -ne 0) { throw '7z test başarısız' }
 $h = (Get-FileHash $ilk -Algorithm SHA256).Hash
-Get-ChildItem (Join-Path $proje 'dist') -Filter 'VideoHat-Paketi.7z*' | ForEach-Object { '{0}  {1:N2} GB' -f $_.Name, ($_.Length / 1GB) }
+Get-ChildItem (Join-Path $proje 'dist') -Filter 'VideoPerisi-Paketi.7z*' | ForEach-Object { '{0}  {1:N2} GB' -f $_.Name, ($_.Length / 1GB) }
 "SHA256 ($(Split-Path $ilk -Leaf)): $h"
-Set-Content (Join-Path $proje 'dist\VideoHat-Paketi.sha256.txt') "$h  $(Split-Path $ilk -Leaf)" -Encoding ASCII
+Set-Content (Join-Path $proje 'dist\VideoPerisi-Paketi.sha256.txt') "$h  $(Split-Path $ilk -Leaf)" -Encoding ASCII

@@ -48,7 +48,7 @@ def _isle(args) -> int:
             hatali += 1
             continue
         for video in _topla(p):
-            cikis = Path(args.cikis) if args.cikis else video.parent / f"{video.stem}_videohat"
+            cikis = Path(args.cikis) if args.cikis else video.parent / f"{video.stem}_videoperisi"
             cikis.mkdir(parents=True, exist_ok=True)
             log.info("İşleniyor: %s", video)
             s = isle_tek(video, cikis, ayar, bay)
@@ -66,7 +66,7 @@ def main(argv=None) -> int:
     alt = ap.add_subparsers(dest="komut", required=True)
     i = alt.add_parser("isle", help="dosya veya klasör işle")
     i.add_argument("girdi", nargs="+")
-    i.add_argument("--cikis", help="çıktı klasörü (varsayılan: videonun yanında <ad>_videohat)")
+    i.add_argument("--cikis", help="çıktı klasörü (varsayılan: videonun yanında <ad>_videoperisi)")
     i.add_argument("--agir-ses", action="store_true", help="DeepFilterNet ağır mod")
     i.add_argument("--goruntu", action="store_true", help="görüntü iyileştirme")
     i.add_argument("--upscale", action="store_true", help="Real-ESRGAN x2 (isteğe bağlı)")

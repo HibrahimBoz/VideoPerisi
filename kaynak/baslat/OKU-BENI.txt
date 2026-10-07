@@ -1,12 +1,12 @@
-VideoHat-Paketi  —  KAPALI AĞ İÇİN HAZIR (Windows 10/11, 64 bit)
+Video Perisi  —  KAPALI AĞ İÇİN HAZIR (Windows 10/11, 64 bit)
 ================================================================
-KURULUM YOK. 7z dosyasını açın (örn. D:\VideoHat-Paketi) ve BASLAT.bat çift tıklayın.
+KURULUM YOK. 7z dosyasını açın (örn. D:\VideoPerisi-Paketi) ve BASLAT.bat çift tıklayın.
   - Python, ffmpeg, modeller, Kdenlive: hepsi pakette. İnternet, yönetici yetkisi, ek yazılım GEREKMEZ.
-  - Yol boşluk/Türkçe karakter içerebilir; yine de kısa bir yol (D:\VideoHat-Paketi) önerilir.
+  - Yol boşluk/Türkçe karakter içerebilir; yine de kısa bir yol (D:\VideoPerisi-Paketi) önerilir.
 
 İÇİNDEKİLER
   BASLAT.bat          menüyü açar: video seç / klasör seç / izleme / Kdenlive / test
-  VideoHat\           transkript + ses/görüntü iyileştirme motoru (KULLANIM.txt içinde ayrıntı)
+  VideoPerisi\        transkript + ses/görüntü iyileştirme motoru (KULLANIM.txt içinde ayrıntı)
   Kdenlive\           Kdenlive 26.08.1 (taşınabilir; Kdenlive\...\bin\kdenlive.exe)
   Surucu\             NVIDIA 616.92 sürücüsü (yalnız eski/yoksa; BASLAT.bat -> 7). Ayrıntı: Surucu\SURUCU-OKU-BENI.txt
 
@@ -21,6 +21,6 @@ DONANIM
 
 NOTLAR
   - Windows Defender/AppLocker taşınabilir .exe ve .dll'leri engellerse klasörü "izin verilen" listesine ekletin.
-  - İşlenen videoların yanında "<ad>_videohat" klasörü oluşur: .srt/.vtt/.txt transkript + temizlenmiş sesli .mp4.
+  - İşlenen videoların yanında "<ad>_videoperisi" klasörü oluşur: .srt/.vtt/.txt transkript + TEK nihai video (<ad>_islenmis.mp4: ses temizlenmiş, istenirse görüntü de iyileştirilmiş).
     SRT dosyasını Kdenlive'da Kdenlive altyazı özelliğiyle (altyazı dosyası içe aktarma) ekleyebilirsiniz.
   - Kdenlive ilk açılışta ayar sorabilir; ağ gerektirmez.

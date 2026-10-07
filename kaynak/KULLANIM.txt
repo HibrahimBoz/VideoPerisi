@@ -1,22 +1,21 @@
-VideoHat — çevrimdışı Türkçe video transkript + ses/görüntü iyileştirme
-=======================================================================
+Video Perisi — çevrimdışı Türkçe video transkript + ses/görüntü iyileştirme
+===========================================================================
 KURULUM YOK. Bu klasörü hedef makineye olduğu gibi kopyalayın (USB/robocopy). Python, ffmpeg,
 internet, yönetici yetkisi GEREKMEZ. Yol boşluk/Türkçe karakter içerebilir.
 
-Hangi paket?
-  VideoHat-GPU : NVIDIA kartlı makine (RTX 3060/3070...). large-v3 modeli, cuda\ DLL'leri içerir.
-                 Kart bulunamaz/yetersizse kendiliğinden CPU'ya düşer.
-  VideoHat-CPU : Kartsız/zayıf kartlı makine. medium modeli (int8). Daha yavaş (~0,7x gerçek süre, i7'de ölçüldü).
+Tek paket her makinede çalışır: NVIDIA kart varsa (RTX 3060/3070...; sürücü >= 528.33) GPU ile hızlı çalışır
+(large-v3 modeli); kart yoksa/yetersizse kendiliğinden CPU'ya düşer (medium modeli, ~0,7x gerçek süre, i7'de ölçüldü).
 
 1) İLK ÇALIŞTIRMA — kontrol.bat çift tıklayın. "SONUÇ: GEÇTİ" görmelisiniz (5 sn örnek ses ile uçtan uca test).
 
 2) TEK VİDEO / KLASÖR — calistir.bat dosyasının ÜSTÜNE video(lar)ı sürükleyin, ya da:
      calistir.bat "D:\dersler\ders1.mp4"
      calistir.bat "D:\dersler" --cikis "D:\cikti"
-   Çıktı (varsayılan: videonun yanında ders1_videohat\):
+   Çıktı (varsayılan: videonun yanında ders1_videoperisi\):
      ders1.srt / .vtt / .txt / .json   transkript (zaman damgalı)
-     ders1_ses.mp4                      görüntü aynen, ses temizlenmiş + -16 LUFS
-     ders1_goruntu.mp4                  (yalnız --goruntu ile) hafif görüntü iyileştirme
+     ders1_islenmis.mp4                TEK nihai video: ses temizlenmiş (-16 LUFS); --goruntu seçildiyse
+                                       görüntü de iyileştirilmiş (aksi halde görüntü aynen kopyalanır);
+                                       --upscale seçildiyse 2 kat büyütülmüş
    Seçenekler:
      --agir-ses     DeepFilterNet ile güçlü gürültü giderme (çok gürültülü kayıtlarda)
      --goruntu      hqdn3d + eq + unsharp (hafif); tahta/ekran kaydında yazıyı bozmaz

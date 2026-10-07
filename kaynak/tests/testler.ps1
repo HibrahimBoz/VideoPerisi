@@ -61,7 +61,7 @@ $o1 = Join-Path $cikisKok 'temiz'
 $r = Isle $Paket (Join-Path $veri 'temiz.mp4') $o1
 $w = Wer $ref (Join-Path $o1 'temiz.txt')
 Kaydet 'c WER temiz (<=10)' ($r.kod -eq 0 -and $w -le 10) "WER=$w% süre=$([math]::Round($r.sure,1))s kod=$($r.kod)"
-$l = Lufs (Join-Path $o1 'temiz_ses.mp4')
+$l = Lufs (Join-Path $o1 'temiz_islenmis.mp4')
 Kaydet 'd loudness (-16±1, TP<=-1)' ([math]::Abs($l.I + 16) -le 1 -and $l.TP -le -1.0) "I=$($l.I) LUFS TP=$($l.TP) dBFS"
 
 $o2 = Join-Path $cikisKok 'gur_normal'

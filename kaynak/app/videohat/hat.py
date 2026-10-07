@@ -170,43 +170,41 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         cikti_dosyalari.append(json_yolu)
 
         if not _video_akisi_var(video):
-            gunluk.info("Girdide görüntü yok; mux/görüntü adımları atlandı.")
-            goruntu_etkin = upscale_etkin = False
+            gunluk.info("Girdide görüntü yok; video çıktısı üretilmedi (yalnız transkript).")
         else:
+            # Tek nihai video: <ad>_islenmis.mp4. Ara adımlar _ara\ içinde kalır ve iş bitince silinir.
             goruntu_etkin = bayraklar.goruntu or ayar.goruntu.etkin
-            upscale_etkin = bayraklar.upscale
-            mux_yolu = cikis_dir / f"{ad}_ses.mp4"
-            ffmpeg = str(yollar.ffmpeg())
-            olc(
-                "mux",
-                lambda: _ffmpeg_calistir(
-                    [
-                        ffmpeg, "-y", "-i", str(video), "-i", str(temiz48),
-                        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
-                        "-c:a", "aac", "-b:a", "192k", "-shortest", str(mux_yolu),
-                    ]
-                ),
-            )
-            cikti_dosyalari.append(mux_yolu)
-            son_video = mux_yolu
+            son_video = ara / "video.mp4"
             if goruntu_etkin:
-                goruntu_yolu = cikis_dir / f"{ad}_goruntu.mp4"
+                # Orijinal video yeniden kodlanır (hafif filtreler) + temiz ses
                 olc(
                     "goruntu",
-                    lambda: goruntu.iyilestir(
-                        mux_yolu, temiz48, goruntu_yolu, ayar, ayar.goruntu.nvenc
+                    lambda: goruntu.iyilestir(video, temiz48, son_video, ayar, ayar.goruntu.nvenc),
+                )
+            else:
+                # Görüntü aynen kopyalanır, yalnız ses temizi ile değiştirilir
+                ffmpeg = str(yollar.ffmpeg())
+                olc(
+                    "mux",
+                    lambda: _ffmpeg_calistir(
+                        [
+                            ffmpeg, "-y", "-i", str(video), "-i", str(temiz48),
+                            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+                            "-c:a", "aac", "-b:a", "192k", "-shortest", str(son_video),
+                        ]
                     ),
                 )
-                cikti_dosyalari.append(goruntu_yolu)
-                son_video = goruntu_yolu
-            if upscale_etkin:
-                upscale_yolu = cikis_dir / f"{ad}_upscale.mp4"
+            if bayraklar.upscale:
+                buyuk = ara / "video_buyuk.mp4"
                 try:
-                    olc("upscale", lambda: goruntu.upscale(son_video, upscale_yolu, ayar))
-                    cikti_dosyalari.append(upscale_yolu)
+                    olc("upscale", lambda: goruntu.upscale(son_video, buyuk, ayar))
+                    son_video = buyuk
                 except UpscaleHatasi as hata:
                     sonuc.sureler.setdefault("upscale", 0.0)
                     gunluk.warning("Upscale atlandı: %s", hata)
+            nihai = cikis_dir / f"{ad}_islenmis.mp4"
+            shutil.move(str(son_video), str(nihai))
+            cikti_dosyalari.append(nihai)
 
         cikti.json_meta(bolumler, secim, sonuc.sureler, json_yolu)
         sonuc.basarili = True

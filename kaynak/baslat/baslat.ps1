@@ -1,4 +1,4 @@
-﻿# VideoHat başlatıcı menüsü (Windows 10/11, yerleşik PowerShell 5.1; kurulum gerektirmez).
+﻿# Video Perisi başlatıcı menüsü (Windows 10/11, yerleşik PowerShell 5.1; kurulum gerektirmez).
 # Etkileşimli: BASLAT.bat çift tıklanır. Otomatik test: -Dosya <yol> [-Agir e|h] [-Goruntu e|h]
 param(
     [string]$Dosya = '',
@@ -7,15 +7,15 @@ param(
 )
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$kok = Split-Path -Parent $PSScriptRoot          # ...\VideoHat  (bu dosya araclar\ altında)
-$paketKok = Split-Path -Parent $kok              # ...\VideoHat-Paketi
+$kok = Split-Path -Parent $PSScriptRoot          # ...\VideoPerisi  (bu dosya araclar\ altında)
+$paketKok = Split-Path -Parent $kok              # ...\VideoPerisi-Paketi
 $kdenlive = Get-ChildItem (Join-Path $paketKok 'Kdenlive') -Recurse -Filter kdenlive.exe -ErrorAction SilentlyContinue | Select-Object -First 1
 $env:VIDEOHAT_PAUSE = '0'
 
 function Baslik {
     Clear-Host
     Write-Host '=============================================' -ForegroundColor Cyan
-    Write-Host '  VideoHat  -  Türkçe transkript + ses/görüntü' -ForegroundColor Cyan
+    Write-Host '  Video Perisi  -  Türkçe transkript + ses/görüntü' -ForegroundColor Cyan
     Write-Host '=============================================' -ForegroundColor Cyan
     Write-Host ''
 }
@@ -79,7 +79,7 @@ function Isle([string[]]$girdiler, [bool]$agir, [bool]$goruntu) {
     & (Join-Path $kok 'calistir.bat') @args2
     $kod = $LASTEXITCODE
     Write-Host ''
-    if ($kod -eq 0) { Write-Host 'BİTTİ. Çıktılar her videonun yanındaki "<ad>_videohat" klasöründe.' -ForegroundColor Green }
+    if ($kod -eq 0) { Write-Host 'BİTTİ. Çıktılar her videonun yanındaki "<ad>_videoperisi" klasöründe (tek video: <ad>_islenmis.mp4).' -ForegroundColor Green }
     else { Write-Host "Hata oluştu (kod $kod). Ayrıntı: $kok\is\gunluk" -ForegroundColor Red }
     $ilk = $girdiler[0]
     $klasor = if (Test-Path $ilk -PathType Container) { $ilk } else { Split-Path -Parent $ilk }
@@ -118,12 +118,12 @@ while ($true) {
             & (Join-Path $kok 'izle.bat')
         }
         '4' {
-            if ($kdenlive) { Start-Process $kdenlive.FullName } else { Write-Host 'Kdenlive bulunamadı (VideoHat-Paketi\Kdenlive).' -ForegroundColor Red; Read-Host 'Enter' | Out-Null }
+            if ($kdenlive) { Start-Process $kdenlive.FullName } else { Write-Host 'Kdenlive bulunamadı (VideoPerisi-Paketi\Kdenlive).' -ForegroundColor Red; Read-Host 'Enter' | Out-Null }
         }
         '5' { & (Join-Path $kok 'kontrol.bat'); Read-Host 'Devam için Enter' | Out-Null }
         '6' { Start-Process notepad.exe -ArgumentList ('"' + (Join-Path $kok 'KULLANIM.txt') + '"') }
         '7' {
-            if (-not $surucuDosya) { Write-Host 'Pakette sürücü dosyası yok (VideoHat-Paketi\Surucu).' -ForegroundColor Red }
+            if (-not $surucuDosya) { Write-Host 'Pakette sürücü dosyası yok (VideoPerisi-Paketi\Surucu).' -ForegroundColor Red }
             else {
                 $sv = Surucu-Surumu
                 Write-Host "Paketteki sürücü: $($surucuDosya.Name)" -ForegroundColor Gray
