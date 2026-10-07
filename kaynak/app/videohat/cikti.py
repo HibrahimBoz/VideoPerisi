@@ -1,4 +1,5 @@
 """VideoHat altyazı (SRT, VTT), düz metin (TXT) ve JSON meta veri çıktı modülü."""
+import hashlib
 import json
 import textwrap
 from pathlib import Path
@@ -115,7 +116,19 @@ def json_meta(
     """Transkripsiyon ve yürütme üstverilerini UTF-8 JSON dosyası olarak kaydeder."""
     yol = Path(yol)
     yol.parent.mkdir(parents=True, exist_ok=True)
+    segmentler = [
+        {
+            "no": i,
+            "bas": round(s.bas, 3),
+            "son": round(s.son, 3),
+            "metin": s.metin.strip(),
+        }
+        for i, s in enumerate(seg)
+    ]
+    segmentler_json = json.dumps(segmentler, ensure_ascii=False, separators=(",", ":"))
+    kaynak_ozet = hashlib.sha256(segmentler_json.encode("utf-8")).hexdigest()
     veri = {
+        "sema_surumu": 2,
         "cihaz": secim.device,
         "compute_type": secim.compute_type,
         "model": secim.model_ad,
@@ -123,6 +136,8 @@ def json_meta(
         "sureler": sureler,
         "segment_sayisi": len(seg),
         "sure_sn": round(max((s.son for s in seg), default=0.0), 2),
+        "kaynak_ozet": kaynak_ozet,
+        "segmentler": segmentler,
     }
     icerik = json.dumps(veri, ensure_ascii=False, indent=2) + "\n"
     yol.write_text(icerik, encoding="utf-8")
