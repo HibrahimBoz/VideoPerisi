@@ -107,7 +107,8 @@ def gcc_phat(
         guven = 1.0
     else:
         oran = val_max / val_ikinci
-        guven = float(np.clip(1.0 - (1.0 / oran), 0.0, 1.0))
+        oran_fark = max(0.0, oran - 1.0)
+        guven = float(np.clip(oran_fark / (oran_fark + 0.28), 0.0, 1.0))
 
     return ofset_sn, guven
 
@@ -181,16 +182,26 @@ def konusma_pencereleri(
     if maks_e <= 1e-9:
         return []
 
-    # Enerji eşiği: en yüksek pencere enerjisinin en az %5'i
-    esik = max(1e-7, 0.05 * maks_e)
-    gecerli = adaylar[enerjiler >= esik]
+    # Enerji eşiği ve sessizlikten kaçınma
+    # Pencerenin tamamı ve başlangıç kısmı (ilk 2 saniye) konuşma enerjisi içermeli
+    esik = max(1e-7, 0.20 * maks_e)
+    p_bas = min(p_ornek, max(1, int(round(sr * 2.0))))
+    enerjiler_bas = (kum[adaylar + p_bas] - kum[adaylar]) / p_bas
+    esik_bas = max(1e-7, 0.05 * maks_e)
+
+    filtre = (enerjiler >= esik) & (enerjiler_bas >= esik_bas)
+    gecerli = adaylar[filtre]
+    if len(gecerli) == 0:
+        gecerli = adaylar[enerjiler >= esik]
+    if len(gecerli) == 0:
+        gecerli = adaylar[enerjiler >= 0.05 * maks_e]
     if len(gecerli) == 0:
         return []
 
     if len(gecerli) <= adet:
         secilen = gecerli
     else:
-        secim_indeksleri = np.round(np.linspace(0, len(gecerli) - 1, adet)).astype(int)
+        secim_indeksleri = np.unique(np.round(np.linspace(0, len(gecerli) - 1, adet)).astype(int))
         secilen = gecerli[secim_indeksleri]
 
     return [float(i / sr) for i in secilen]
