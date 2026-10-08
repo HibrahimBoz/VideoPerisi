@@ -590,7 +590,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         }
         else
         {
-            yeni = new Media(_libVlc, dosya, FromType.FromPath);
+            yeni = new Media(_libVlc, VlcYolu.Hazirla(dosya), FromType.FromPath);
         }
 
         var eski = state.AktifMedya;
@@ -621,7 +621,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         if (!File.Exists(kaynak) || string.Equals(kaynak, state.AktifDosya, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(kaynak, state.HazirDosya, StringComparison.OrdinalIgnoreCase)) return;
         state.HazirMedya?.Dispose();
-        state.HazirMedya = new Media(_libVlc, kaynak, FromType.FromPath);
+        state.HazirMedya = new Media(_libVlc, VlcYolu.Hazirla(kaynak), FromType.FromPath);
         state.HazirDosya = kaynak;
     }
 

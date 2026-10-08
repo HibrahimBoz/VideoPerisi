@@ -62,7 +62,7 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
         var eskiMedya = Medya;
         MediaPlayer.Stop();
 
-        var yeniMedya = new Media(LibVlc, dosyaYolu, FromType.FromPath);
+        var yeniMedya = new Media(LibVlc, VlcYolu.Hazirla(dosyaYolu), FromType.FromPath);
         MediaPlayer.Media = yeniMedya;
         Medya = yeniMedya;
 
