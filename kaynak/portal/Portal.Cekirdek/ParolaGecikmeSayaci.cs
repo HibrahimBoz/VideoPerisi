@@ -64,25 +64,40 @@ public class ParolaGecikmeSayaci
     {
         lock (_kilit)
         {
-            if (!KilitliMi(simdiUtc))
+            var simdi = simdiUtc ?? DateTime.UtcNow;
+            if (_hataliDeneme >= AzamiHataliDeneme)
             {
-                return true;
+                if ((simdi - _kilitZamaniUtc).TotalSeconds >= KilitSuresiSaniye)
+                {
+                    _hataliDeneme = 0;
+                    _kilitZamaniUtc = DateTime.MinValue;
+                    return true;
+                }
+                return false;
             }
-            return false;
+            return true;
         }
     }
 
     /// <summary>
     /// Hatalı bir parola girişini kaydeder. Eşik aşılırsa kilit zamanını başlatır.
+    /// Kilit süresi geçmişse önceki kilidi sıfırlayıp yeni denemeyi başlatır.
     /// </summary>
     public void HataliGiris(DateTime? zamanUtc = null)
     {
         lock (_kilit)
         {
+            var simdi = zamanUtc ?? DateTime.UtcNow;
+            if (_hataliDeneme >= AzamiHataliDeneme && (simdi - _kilitZamaniUtc).TotalSeconds >= KilitSuresiSaniye)
+            {
+                _hataliDeneme = 0;
+                _kilitZamaniUtc = DateTime.MinValue;
+            }
+
             _hataliDeneme++;
             if (_hataliDeneme >= AzamiHataliDeneme)
             {
-                _kilitZamaniUtc = zamanUtc ?? DateTime.UtcNow;
+                _kilitZamaniUtc = simdi;
             }
         }
     }

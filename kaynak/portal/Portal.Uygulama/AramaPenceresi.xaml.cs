@@ -230,11 +230,11 @@ public partial class AramaPenceresi : Window
             if (File.Exists(dersJson))
             {
                 var dersTanimi = DersTanimiOkuyucu.Oku(dersJson);
-                pencere = new CokAciliOynaticiPenceresi(dersTanimi, baslangicSn, ders.JsonYolu);
+                pencere = new CokAciliOynaticiPenceresi(dersTanimi, baslangicSn, ders.JsonYolu, _aramaMotoru as MetinAramaMotoru);
             }
             else
             {
-                pencere = new OynaticiPenceresi(ders, baslangicSn);
+                pencere = new OynaticiPenceresi(ders, baslangicSn, _aramaMotoru as MetinAramaMotoru);
             }
 
             pencere.Owner = this;

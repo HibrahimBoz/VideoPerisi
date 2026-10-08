@@ -1,0 +1,78 @@
+<UserControl x:Class="Portal.Uygulama.DuzenlemePaneli"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#1A202C" Foreground="#F1F2F4">
+    <Border BorderBrush="#2D3748" BorderThickness="1" CornerRadius="4" Padding="10">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Başlık ve Çakışma Rozeti -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                <TextBlock x:Name="SegmentBaslikMetni" Text="Segment Düzenle"
+                           FontWeight="SemiBold" FontSize="13" Foreground="#E2E8F0" VerticalAlignment="Center"/>
+                <Border x:Name="CakismaRozeti" DockPanel.Dock="Right" Background="#C53030"
+                        CornerRadius="3" Padding="6,2" Visibility="Collapsed" HorizontalAlignment="Right">
+                    <TextBlock Text="⚠ ÇAKIŞMA" Foreground="#FFFFFF" FontWeight="Bold" FontSize="11"/>
+                </Border>
+            </DockPanel>
+
+            <!-- Düzenleme Metin Kutusu -->
+            <TextBox x:Name="SegmentMetinKutusu" Grid.Row="1"
+                     MinHeight="56" MaxHeight="90" TextWrapping="Wrap" AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto"
+                     Background="#101114" Foreground="#F1F2F4" BorderBrush="#4A5568"
+                     Padding="6,4" FontSize="13" Margin="0,0,0,6"/>
+
+            <!-- Butonlar ve Durum Metni -->
+            <DockPanel Grid.Row="2" Margin="0,0,0,8" LastChildFill="False">
+                <TextBlock x:Name="DurumMetni" DockPanel.Dock="Left"
+                           Foreground="#68D391" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="150"/>
+                <Button x:Name="KaydetDugmesi" Content="Kaydet" DockPanel.Dock="Right"
+                        Padding="12,5" Margin="6,0,0,0" FontWeight="SemiBold"
+                        Background="#2B6CB0" Foreground="#FFFFFF" BorderBrush="#2B6CB0"
+                        Click="Kaydet_Click"/>
+                <Button x:Name="GeriAlDugmesi" Content="Geri Al" DockPanel.Dock="Right"
+                        Padding="10,5" Margin="6,0,0,0"
+                        Background="#4A5568" Foreground="#E2E8F0" BorderBrush="#4A5568"
+                        Click="GeriAl_Click"/>
+                <Button x:Name="CsvAktarDugmesi" Content="CSV Dışa Aktar" DockPanel.Dock="Right"
+                        Padding="10,5" Margin="6,0,0,0"
+                        Background="#2D3748" Foreground="#CBD5E0" BorderBrush="#4A5568"
+                        Click="CsvAktar_Click"/>
+            </DockPanel>
+
+            <!-- Geçmiş Paneli Başlığı -->
+            <DockPanel Grid.Row="3" Margin="0,4,0,4">
+                <TextBlock Text="Düzeltme Geçmişi" FontWeight="SemiBold" FontSize="12" Foreground="#A0AEC0"/>
+                <TextBlock x:Name="GecmisSayisiMetni" Text="(0)" FontSize="12" Foreground="#718096" Margin="4,0,0,0"/>
+            </DockPanel>
+
+            <!-- Geçmiş Listesi -->
+            <ListBox x:Name="GecmisListesi" Grid.Row="4"
+                     MaxHeight="120" MinHeight="45"
+                     Background="#101114" Foreground="#E2E8F0" BorderBrush="#2D3748"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="#2D3748" BorderThickness="0,0,0,1" Padding="4,3">
+                            <StackPanel>
+                                <DockPanel>
+                                    <TextBlock Text="{Binding Kullanici}" FontWeight="SemiBold" Foreground="#63B3ED" FontSize="11"/>
+                                    <TextBlock Text="{Binding TurMetni}" Foreground="#F6E05E" FontSize="11" Margin="6,0,0,0"/>
+                                    <TextBlock Text="{Binding ZamanMetni}" DockPanel.Dock="Right" Foreground="#A0AEC0" FontSize="10" HorizontalAlignment="Right"/>
+                                </DockPanel>
+                                <TextBlock Text="{Binding DegisimMetni}" TextWrapping="Wrap" Foreground="#CBD5E0" FontSize="11" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+    </Border>
+</UserControl>

@@ -250,4 +250,66 @@ public class YardimciTestleri
         Assert.Equal(1, sayac.KalanBeklemeSaniyesi(zaman.AddSeconds(59.1)));
         Assert.Equal(0, sayac.KalanBeklemeSaniyesi(zaman.AddSeconds(60)));
     }
+
+    [Fact]
+    public void ParolaGecikmeSayaci_KilitSuresiDoluncaYeniDenemedeSayacSifirlanirVeTekHatadaKilitlenmez()
+    {
+        var sayac = new ParolaGecikmeSayaci(azamiHataliDeneme: 5, kilitSuresiSaniye: 30);
+        var baslangic = new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 5; i++)
+        {
+            sayac.HataliGiris(baslangic);
+        }
+        Assert.True(sayac.KilitliMi(baslangic));
+
+        // 31 saniye sonra kilit süresi doldu, yeni bir hatalı giriş yapıldı
+        var sonra31Sn = baslangic.AddSeconds(31);
+        sayac.HataliGiris(sonra31Sn);
+
+        // Yeni döngüde henüz 1 hatalı deneme oldu, hemen kilitlenmemeli
+        Assert.False(sayac.KilitliMi(sonra31Sn));
+        Assert.True(sayac.DenemeYapilabilirMi(sonra31Sn));
+        Assert.Equal(1, sayac.HataliDenemeSayisi);
+    }
+
+    [Fact]
+    public void ParolaGecikmeSayaci_DenemeYapilabilirMiKilitSuresiDoluncaTemizler()
+    {
+        var sayac = new ParolaGecikmeSayaci(azamiHataliDeneme: 5, kilitSuresiSaniye: 30);
+        var baslangic = new DateTime(2026, 3, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        for (int i = 0; i < 5; i++)
+        {
+            sayac.HataliGiris(baslangic);
+        }
+        Assert.False(sayac.DenemeYapilabilirMi(baslangic));
+
+        var sonra35Sn = baslangic.AddSeconds(35);
+        Assert.True(sayac.DenemeYapilabilirMi(sonra35Sn));
+        Assert.Equal(0, sayac.HataliDenemeSayisi);
+        Assert.False(sayac.KilitliMi(sonra35Sn));
+    }
+
+    [Fact]
+    public async Task ParolaGecikmeSayaci_CokluIsParcacigiErisimiGuvenlidir()
+    {
+        var sayac = new ParolaGecikmeSayaci(azamiHataliDeneme: 50, kilitSuresiSaniye: 30);
+        var gorevler = new Task[10];
+
+        for (int i = 0; i < 10; i++)
+        {
+            gorevler[i] = Task.Run(() =>
+            {
+                for (int j = 0; j < 5; j++)
+                {
+                    sayac.HataliGiris();
+                }
+            });
+        }
+
+        await Task.WhenAll(gorevler);
+        Assert.Equal(50, sayac.HataliDenemeSayisi);
+        Assert.True(sayac.KilitliMi());
+    }
 }

@@ -36,19 +36,39 @@ public partial class OynaticiPenceresi : Window
     private WindowStyle _oncekiWindowStyle = WindowStyle.SingleBorderWindow;
     private ResizeMode _oncekiResizeMode = ResizeMode.CanResize;
 
+    private readonly DispatcherTimer _yoklamaZamanlayici;
+    private readonly ParolaGecikmeSayaci _parolaSayaci = new();
+    private bool _duzenlemeAcik;
+    private bool _oturumParolaDogrulandi;
+    private bool _yoklamaGuncelleniyor;
+    private DateTime _sonKlasorMtimeUtc = DateTime.MinValue;
+    private int _sonDuzeltmeSayisi = -1;
+    private MetinAramaMotoru? _aramaMotoru;
+    private string? _kokKlasor;
+    private Transkript? _hamTranskript;
+
     public DersKaydi Kayit { get; }
     public double BaslangicSn { get; }
     public IOynatici Oynatici => _oynatici;
 
     public OynaticiPenceresi()
-        : this(new DersKaydi(string.Empty, string.Empty, string.Empty, null), 0)
+        : this(new DersKaydi(string.Empty, string.Empty, string.Empty, null), 0, null)
     {
     }
 
     public OynaticiPenceresi(DersKaydi kayit, double baslangicSn = 0)
+        : this(kayit, baslangicSn, null)
+    {
+    }
+
+    public OynaticiPenceresi(DersKaydi kayit, double baslangicSn, MetinAramaMotoru? aramaMotoru)
     {
         Kayit = kayit ?? new DersKaydi(string.Empty, string.Empty, string.Empty, null);
         BaslangicSn = baslangicSn;
+        _aramaMotoru = aramaMotoru;
+        _kokKlasor = !string.IsNullOrWhiteSpace(Kayit.KlasorYolu)
+            ? Kayit.KlasorYolu
+            : Directory.GetCurrentDirectory();
 
         InitializeComponent();
 
@@ -59,6 +79,11 @@ public partial class OynaticiPenceresi : Window
 
         TranskriptListesi.ItemsSource = _goruntulenenSegmentler;
 
+        DuzenlemeKontrolu.Ders = Kayit;
+        DuzenlemeKontrolu.KokKlasor = _kokKlasor;
+        DuzenlemeKontrolu.AramaMotoru = _aramaMotoru;
+        DuzenlemeKontrolu.DuzenlemeKaydedildi += OnDuzenlemeKaydedildi;
+
         // 250 ms aralıklı zaman senkronizasyon zamanlayıcısı
         _zamanlayici = new DispatcherTimer
         {
@@ -66,11 +91,19 @@ public partial class OynaticiPenceresi : Window
         };
         _zamanlayici.Tick += Zamanlayici_Tick;
 
+        // 30 sn aralıklı başka kullanıcıların düzeltmelerini yoklama zamanlayıcısı
+        _yoklamaZamanlayici = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _yoklamaZamanlayici.Tick += YoklamaZamanlayici_Tick;
+
         // Transkript ve videoyu yükle
         TranskriptiYukle();
         VideoyuYukle(baslangicSn);
 
         _zamanlayici.Start();
+        _yoklamaZamanlayici.Start();
     }
 
     /// <summary>
@@ -90,13 +123,16 @@ public partial class OynaticiPenceresi : Window
 
         try
         {
-            var hamTranskript = TranskriptOkuyucu.Oku(transkriptYolu);
-            string klasor = !string.IsNullOrWhiteSpace(Kayit.KlasorYolu)
-                ? Kayit.KlasorYolu
-                : Path.GetDirectoryName(transkriptYolu) ?? string.Empty;
+            _hamTranskript = TranskriptOkuyucu.Oku(transkriptYolu);
+            if (string.IsNullOrEmpty(Kayit.JsonYolu))
+            {
+                var guncelKayit = new DersKaydi(Kayit.Ad, Kayit.KlasorYolu, transkriptYolu, Kayit.VideoYolu);
+                DuzenlemeKontrolu.Ders = guncelKayit;
+            }
 
-            var depo = new DuzeltmeDeposu(klasor);
-            var birlestirme = depo.Birlestir(hamTranskript);
+            string duzeltmeKlasoru = DuzenlemeKontrolu.DuzeltmelerKlasoruBul();
+            var depo = new DuzeltmeDeposu(duzeltmeKlasoru);
+            var birlestirme = depo.Birlestir(_hamTranskript, duzeltmeKlasoru);
 
             foreach (var seg in birlestirme.Segmentler)
             {
@@ -104,6 +140,7 @@ public partial class OynaticiPenceresi : Window
             }
 
             FiltreyiUygula();
+            IlkMtimeBelirle(duzeltmeKlasoru);
 
             // Eğer video süresi henüz bilinmiyorsa son segmentten yaklaşık süre al
             if (_efektifSegmentler.Count > 0 && _toplamSureSn <= 0)
@@ -498,6 +535,7 @@ public partial class OynaticiPenceresi : Window
 
     private void TranskriptListesi_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_yoklamaGuncelleniyor) return;
         SegmenteAtla();
     }
 
@@ -514,6 +552,11 @@ public partial class OynaticiPenceresi : Window
     {
         if (TranskriptListesi.SelectedItem is TranskriptSatirGorunumu satir)
         {
+            if (_duzenlemeAcik)
+            {
+                DuzenlemeKontrolu.SegmentYukle(satir.Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
+            }
+
             if (_videoVar)
             {
                 _oynatici.Ara(satir.Segment.Bas);
@@ -666,6 +709,7 @@ public partial class OynaticiPenceresi : Window
         _kapatildi = true;
 
         _zamanlayici.Stop();
+        _yoklamaZamanlayici.Stop();
 
         try
         {
@@ -693,6 +737,179 @@ public partial class OynaticiPenceresi : Window
         catch
         {
             // Temizlik hatasını yut
+        }
+    }
+
+    /// <summary>
+    /// Düzenle düğmesine tıklandığında parola kontrolü yapar ve paneli açıp kapatır.
+    /// </summary>
+    private void Duzenle_Click(object sender, RoutedEventArgs e)
+    {
+        if (_duzenlemeAcik)
+        {
+            _duzenlemeAcik = false;
+            DuzenlemeKontrolu.Visibility = Visibility.Collapsed;
+            DuzenleDugmesi.Content = "Düzenle";
+            return;
+        }
+
+        if (!DuzenlemeKontrolu.Dogrula(this, ref _oturumParolaDogrulandi, _parolaSayaci))
+        {
+            return;
+        }
+
+        _duzenlemeAcik = true;
+        DuzenlemeKontrolu.Visibility = Visibility.Visible;
+        DuzenleDugmesi.Content = "Düzenlemeyi Kapat";
+
+        if (TranskriptListesi.SelectedItem is TranskriptSatirGorunumu secili)
+        {
+            DuzenlemeKontrolu.SegmentYukle(secili.Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
+        }
+        else if (_goruntulenenSegmentler.Count > 0)
+        {
+            TranskriptListesi.SelectedItem = _goruntulenenSegmentler[0];
+            DuzenlemeKontrolu.SegmentYukle(_goruntulenenSegmentler[0].Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
+        }
+    }
+
+    /// <summary>
+    /// Düzeltme kaydedildiğinde transkripti yeniler ve seçili segmenti günceller.
+    /// </summary>
+    private void OnDuzenlemeKaydedildi(EfektifSegment seg)
+    {
+        TranskriptiYukle();
+
+        var guncel = _goruntulenenSegmentler.FirstOrDefault(s => s.Segment.No == seg.No);
+        if (guncel != null)
+        {
+            TranskriptListesi.SelectedItem = guncel;
+            DuzenlemeKontrolu.SegmentYukle(guncel.Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
+        }
+    }
+
+    /// <summary>
+    /// 30 sn aralıklarla düzeltmeler klasörünü yoklar; değişiklik varsa transkript ve aramayı yeniler.
+    /// </summary>
+    private void YoklamaZamanlayici_Tick(object? sender, EventArgs e)
+    {
+        if (_kapatildi) return;
+        YoklaVeGuncelle();
+    }
+
+    private void YoklaVeGuncelle()
+    {
+        _yoklamaGuncelleniyor = true;
+        try
+        {
+            string duzeltmeKlasoru = DuzenlemeKontrolu.DuzeltmelerKlasoruBul();
+            if (!Directory.Exists(duzeltmeKlasoru))
+            {
+                if (_sonDuzeltmeSayisi > 0)
+                {
+                    _sonKlasorMtimeUtc = DateTime.MinValue;
+                    _sonDuzeltmeSayisi = 0;
+                    TranskriptiYukle();
+                    DersiYenileMotoru();
+                }
+                return;
+            }
+
+            var di = new DirectoryInfo(duzeltmeKlasoru);
+            var files = di.GetFiles("*.json");
+            DateTime sonMtime = di.LastWriteTimeUtc;
+            foreach (var f in files)
+            {
+                if (f.LastWriteTimeUtc > sonMtime) sonMtime = f.LastWriteTimeUtc;
+            }
+
+            bool degisti = (_sonDuzeltmeSayisi >= 0 && files.Length != _sonDuzeltmeSayisi) ||
+                           (sonMtime > _sonKlasorMtimeUtc);
+
+            if (degisti)
+            {
+                _sonKlasorMtimeUtc = sonMtime;
+                _sonDuzeltmeSayisi = files.Length;
+
+                int seciliNo = (TranskriptListesi.SelectedItem is TranskriptSatirGorunumu oncekiSecili)
+                    ? oncekiSecili.Segment.No
+                    : (DuzenlemeKontrolu.SeciliSegment?.No ?? -1);
+
+                TranskriptiYukle();
+                DersiYenileMotoru();
+
+                if (seciliNo >= 0)
+                {
+                    var guncel = _goruntulenenSegmentler.FirstOrDefault(s => s.Segment.No == seciliNo);
+                    if (guncel != null)
+                    {
+                        TranskriptListesi.SelectedItem = guncel;
+                        if (_duzenlemeAcik)
+                        {
+                            bool taslakVar = DuzenlemeKontrolu.TaslakVarMi;
+                            DuzenlemeKontrolu.SegmentYukle(guncel.Segment, Kayit.Ad, _hamTranskript?.KaynakOzet, taslagiKoru: taslakVar);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            TranskriptDurumMetni.Text = "Düzeltmeler yenilenemedi: " + ex.Message;
+        }
+        finally
+        {
+            _yoklamaGuncelleniyor = false;
+        }
+    }
+
+    private void IlkMtimeBelirle(string duzeltmeKlasoru)
+    {
+        try
+        {
+            if (Directory.Exists(duzeltmeKlasoru))
+            {
+                var di = new DirectoryInfo(duzeltmeKlasoru);
+                var files = di.GetFiles("*.json");
+                DateTime sonMtime = di.LastWriteTimeUtc;
+                foreach (var f in files)
+                {
+                    if (f.LastWriteTimeUtc > sonMtime) sonMtime = f.LastWriteTimeUtc;
+                }
+                _sonKlasorMtimeUtc = sonMtime;
+                _sonDuzeltmeSayisi = files.Length;
+            }
+            else
+            {
+                _sonKlasorMtimeUtc = DateTime.MinValue;
+                _sonDuzeltmeSayisi = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            TranskriptDurumMetni.Text = "Düzeltme klasörü okunamadı: " + ex.Message;
+        }
+    }
+
+    private void DersiYenileMotoru()
+    {
+        try
+        {
+            var kayit = DuzenlemeKontrolu.Ders ?? Kayit;
+            if (_aramaMotoru != null)
+            {
+                _aramaMotoru.DersiYenile(kayit);
+            }
+            else
+            {
+                string kok = !string.IsNullOrEmpty(_kokKlasor) ? _kokKlasor : kayit.KlasorYolu;
+                using var motor = new MetinAramaMotoru(new IndeksOnbellek(), new DuzeltmeDeposu(kok));
+                motor.DersiYenile(kayit);
+            }
+        }
+        catch (Exception ex)
+        {
+            TranskriptDurumMetni.Text = "Arama indeksi yenilenemedi: " + ex.Message;
         }
     }
 }
