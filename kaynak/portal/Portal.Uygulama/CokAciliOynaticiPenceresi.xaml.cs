@@ -740,6 +740,7 @@ public partial class CokAciliOynaticiPenceresi : Window
 
     private void ZamanKaydir()
     {
+        _kaydiracSurukleniyor = false;
         _saat.Ara(ZamanKaydiraci.Value);
         TumKanallariGuncelle(true);
         if (_saat.Oynatiliyor)
@@ -904,6 +905,7 @@ public partial class CokAciliOynaticiPenceresi : Window
 
     private void Pencere_KeyDown(object sender, KeyEventArgs e)
     {
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase) return;
         if (e.Key == Key.G) { GorunumDegistir(new GorunumModu.Izgara()); e.Handled = true; return; }
         if (e.Key == Key.O) { Odak_Click(sender, e); e.Handled = true; return; }
         int kanalNo = e.Key switch { Key.D1 or Key.NumPad1 => 1, Key.D2 or Key.NumPad2 => 2, Key.D3 or Key.NumPad3 => 3, Key.D4 or Key.NumPad4 => 4, _ => 0 };

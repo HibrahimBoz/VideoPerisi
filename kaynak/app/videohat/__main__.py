@@ -28,7 +28,11 @@ def _gunluk_kur(kok: Path) -> None:
 
 def _topla(girdi: Path) -> list[Path]:
     if girdi.is_dir():
-        return sorted(p for p in girdi.rglob("*") if p.suffix.lower() in VIDEO_UZANTILARI)
+        return sorted(p for p in girdi.rglob("*")
+                      if p.is_file() and p.suffix.lower() in VIDEO_UZANTILARI
+                      and not p.stem.lower().endswith("_islenmis")
+                      and not any(a.endswith("_videoperisi") or a == "_ara"
+                                  for a in p.relative_to(girdi).parent.parts))
     return [girdi]
 
 

@@ -446,7 +446,7 @@ def isle_grup(
             goreli_yol = ""
             if dilim.dosya:
                 try:
-                    goreli_yol = os.path.relpath(dilim.dosya, klasor).replace("\\", "/")
+                    goreli_yol = os.path.relpath(dilim.dosya, cikis_dir).replace("\\", "/")
                 except Exception:
                     goreli_yol = str(dilim.dosya).replace("\\", "/")
 

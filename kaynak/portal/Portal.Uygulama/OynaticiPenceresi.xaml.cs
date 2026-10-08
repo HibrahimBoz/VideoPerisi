@@ -664,6 +664,7 @@ public partial class OynaticiPenceresi : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        bool yaziyor = Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase;
         if (e.Key == Key.F11)
         {
             TamEkranGecis();
@@ -679,7 +680,7 @@ public partial class OynaticiPenceresi : Window
         }
         else if (e.Key == Key.Space)
         {
-            if (!TranskriptAramaKutusu.IsFocused)
+            if (!yaziyor)
             {
                 OynatDuraklat();
                 e.Handled = true;
@@ -687,7 +688,7 @@ public partial class OynaticiPenceresi : Window
         }
         else if (e.Key == Key.Left)
         {
-            if (!TranskriptAramaKutusu.IsFocused)
+            if (!yaziyor)
             {
                 ZamanAtla(-10.0);
                 e.Handled = true;
@@ -695,7 +696,7 @@ public partial class OynaticiPenceresi : Window
         }
         else if (e.Key == Key.Right)
         {
-            if (!TranskriptAramaKutusu.IsFocused)
+            if (!yaziyor)
             {
                 ZamanAtla(10.0);
                 e.Handled = true;

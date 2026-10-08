@@ -146,7 +146,10 @@ def dongu(ayar: Ayar, tur_siniri: int | None = None) -> int:
     tur = 0
     try:
         while tur_siniri is None or tur < tur_siniri:
-            tek_tur(ayar, gorulen)
+            try:
+                tek_tur(ayar, gorulen)
+            except OSError as e:  # disk dolu, antivirüs kilidi: izleyici ölmesin
+                log.error("Tur başarısız, sonraki turda yeniden denenir: %s", e)
             tur += 1
             time.sleep(ayar.izle.yoklama_sn)
     except KeyboardInterrupt:

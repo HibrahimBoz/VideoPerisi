@@ -53,7 +53,7 @@ def _ses_akisi_var(video: Path) -> bool:
             creationflags=_penceresiz(),
         )
         return bool(sonuc.stdout.strip())
-    except Exception:
+    except subprocess.CalledProcessError:
         return False
 
 
@@ -66,7 +66,7 @@ def _video_akisi_var(video: Path) -> bool:
             check=True, capture_output=True, text=True, encoding="utf-8",
             errors="replace", creationflags=_penceresiz())
         return bool(sonuc.stdout.strip())
-    except Exception:
+    except subprocess.CalledProcessError:
         return False
 
 
