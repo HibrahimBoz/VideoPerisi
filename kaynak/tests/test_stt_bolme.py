@@ -5,7 +5,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
-from videohat.stt import Segment, bolumleri_kes, filtrele_halusinasyonlar  # noqa: E402
+from videohat.stt import (  # noqa: E402
+    Segment, _adaylari_sec, _ikinci_gecis_bolgeleri, _istem_yap,
+    _parca_siniri_tekrar_temizle, bolumleri_kes, filtrele_halusinasyonlar,
+)
 from videohat.ayar import yukle  # noqa: E402
 
 
@@ -36,7 +39,7 @@ class SttBolmeTesti(unittest.TestCase):
         words = [kelime(0, 0.5, "Birinci"), kelime(1.6, 2.0, "ikinci.")]
         sonuc = bolumleri_kes([bolum(0, 2, words=words)])
         self.assertEqual(len(sonuc), 2)
-        self.assertEqual(sonuc[0].son, 0.5)
+        self.assertEqual(sonuc[0].son, 1.0)
         self.assertEqual(sonuc[1].bas, 1.6)
 
     def test_uc_ardisik_ayni_metinden_ilkini_tutar(self):
@@ -104,15 +107,69 @@ class SttBolmeTesti(unittest.TestCase):
             ayar = yukle(kok)
         self.assertEqual(ayar.stt.guven_esik, 0.45)
         self.assertEqual(ayar.stt.guven_kisa_esik, 0.30)
+        self.assertTrue(ayar.stt.baglam_tasi)
+        self.assertTrue(ayar.stt.ikinci_gecis)
+        self.assertEqual(ayar.stt.ikinci_gecis_esik, 0.60)
+        self.assertEqual(ayar.stt.ikinci_gecis_en_cok_oran, 0.25)
 
     def test_kelimesiz_uzun_segment_kisaltilir(self):
         sonuc = bolumleri_kes([bolum(2, 40, "abcdefghij")])
-        self.assertEqual(sonuc, [Segment(2, 2.4, "abcdefghij")])
+        self.assertEqual(sonuc, [Segment(2, 3.0, "abcdefghij")])
 
     def test_parca_ofseti_sirayi_ve_cakismayi_duzeltir(self):
         words = [kelime(0, 1, "ikinci parça")]
         sonuc = bolumleri_kes([bolum(0, 1, words=words)], ofset=1200, onceki_son=1200.5)
-        self.assertEqual(sonuc, [Segment(1200.5, 1201, "ikinci parça")])
+        self.assertEqual(sonuc, [Segment(1200.5, 1201.5, "ikinci parça")])
+
+    def test_parca_siniri_turkce_case_ve_ek_tekrari_birlestirir(self):
+        sonuc = _parca_siniri_tekrar_temizle(
+            [Segment(1198, 1200, "RADAR İZİ"), Segment(1200, 1202, "radar izi")],
+            [1200],
+        )
+        self.assertEqual(len(sonuc), 1)
+        self.assertEqual(sonuc[0].metin, "RADAR İZİ")
+        ek = _parca_siniri_tekrar_temizle(
+            [Segment(1198, 1200, "Sinyali tekrar"), Segment(1200, 1202, "tekrar")],
+            [1200],
+        )
+        self.assertEqual([s.metin for s in ek], ["Sinyali tekrar"])
+
+    def test_kisa_altyazi_bir_saniyeye_uzar_ama_sonrakine_tasmaz(self):
+        sonuc = bolumleri_kes([
+            bolum(0, 0.5, words=[kelime(0, 0.5, "çıkar.")]),
+            bolum(0.7, 1.2, words=[kelime(0.7, 1.2, "sonraki")]),
+        ])
+        self.assertEqual(sonuc[0].son, 0.7)
+        self.assertLessEqual(sonuc[0].son, sonuc[1].bas)
+        tek = bolumleri_kes([bolum(8, 8.5, words=[kelime(8, 8.5, "çıkar.")])])
+        self.assertEqual(tek[0].son, 9.0)
+
+    def test_ikinci_gecis_bolgesi_guven_butcesi_ve_birlestirme(self):
+        segments = [
+            Segment(10, 14, "düşük güvenli alan", 0.4),
+            Segment(15, 18, "ikinci düşük alan", 0.5),
+            Segment(30, 34, "yüksek güven", 0.9),
+        ]
+        bolgeler = _ikinci_gecis_bolgeleri(segments, 100, 0.6, 0.25)
+        self.assertEqual(bolgeler, [(9, 19)])
+        self.assertLessEqual(sum(b - a for a, b in bolgeler), 25)
+
+    def test_aday_secimi_guven_farki_kucukse_ilk_gecisi_korur(self):
+        ilk = [Segment(1, 2, "ilk geçiş", 0.70)]
+        temiz = [Segment(1, 2, "temiz yeniden", 0.72)]
+        self.assertEqual(_adaylari_sec(ilk, temiz, []), ilk)
+        daha_iyi = [Segment(1, 2, "daha güvenli", 0.80)]
+        self.assertEqual(_adaylari_sec(ilk, daha_iyi, []), daha_iyi)
+        halusinasyon = [Segment(1, 4, "abone ol", 0.99)]
+        self.assertEqual(_adaylari_sec(halusinasyon, daha_iyi, []), daha_iyi)
+        self.assertEqual(_adaylari_sec(halusinasyon, halusinasyon, []), [])
+
+    def test_ilk_prompt_terimleri_ve_onceki_cumleyle_olusturulur(self):
+        self.assertEqual(_istem_yap("", "radar, karıştırma"), "radar, karıştırma")
+        self.assertEqual(
+            _istem_yap("eski cümle. Son cümle burada.", "radar"),
+            "Son cümle burada. radar",
+        )
 
 
 if __name__ == "__main__":

@@ -10,6 +10,12 @@ halusinasyon_esik_sn = 2.0
 guven_esik = 0.45
 guven_kisa_esik = 0.30
 terimler_dosyasi = "terimler.txt"
+baglam_tasi = true
+ikinci_gecis = true
+ikinci_gecis_esik = 0.60
+ikinci_gecis_en_cok_oran = 0.25
+parca_siniri_tekrar_temizle = true
+kisa_altyazi_uzat = true
 [ses]
 highpass_hz = 80
 afftdn_nf = -25

@@ -20,6 +20,12 @@ class SttAyar:
     guven_esik: float = 0.45
     guven_kisa_esik: float = 0.30
     terimler_dosyasi: str = "terimler.txt"
+    baglam_tasi: bool = True
+    ikinci_gecis: bool = True
+    ikinci_gecis_esik: float = 0.60
+    ikinci_gecis_en_cok_oran: float = 0.25
+    parca_siniri_tekrar_temizle: bool = True
+    kisa_altyazi_uzat: bool = True
 
 
 @dataclass
