@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using LibVLCSharp.Shared;
 using Microsoft.Win32;
+using Portal.Cekirdek;
 
 namespace Portal.Uygulama;
 
@@ -33,33 +34,31 @@ public partial class App : Application
             HataKaydetVeGoster(ex, "LibVLC başlatılamadı");
         }
 
-        // Komut satırı argümanı: --kok <klasör>
-        string? kokKlasor = ParseKokArgumani(e.Args);
+        // Kök klasör yapılandırmasını çöz (1. --kok, 2. kullanici.json, 3. ayar.json, 4. dialog)
+        string? kokKlasor = KokYapilandirma.UygulamaKokuBelirle(
+            e.Args,
+            uyariVeDegistirSor: erisilemeyenYol =>
+            {
+                var cevap = MessageBox.Show(
+                    $"Kök klasöre erişilemiyor: {erisilemeyenYol}\n\nKlasörü değiştirmek ister misiniz?",
+                    "Kök Klasör Hatası",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning
+                );
+                return cevap == MessageBoxResult.Yes;
+            },
+            klasorSec: KlasorSecDialog
+        );
 
-        if (string.IsNullOrWhiteSpace(kokKlasor) || !Directory.Exists(kokKlasor))
+        if (string.IsNullOrWhiteSpace(kokKlasor))
         {
-            // FolderBrowserDialog yerine .NET 8 WPF yerleşik OpenFolderDialog
-            var dialog = new OpenFolderDialog
-            {
-                Title = "Ders videoları kök klasörünü seçin",
-                Multiselect = false
-            };
-
-            bool? sonuc = dialog.ShowDialog();
-            if (sonuc == true && !string.IsNullOrWhiteSpace(dialog.FolderName) && Directory.Exists(dialog.FolderName))
-            {
-                kokKlasor = dialog.FolderName;
-            }
-            else
-            {
-                Shutdown();
-                return;
-            }
+            Shutdown();
+            return;
         }
 
         try
         {
-            var anaPencere = new AramaPenceresi(kokKlasor!);
+            var anaPencere = new AramaPenceresi(kokKlasor);
             MainWindow = anaPencere;
             anaPencere.Show();
         }
@@ -70,29 +69,38 @@ public partial class App : Application
         }
     }
 
-    private static string? ParseKokArgumani(string[] args)
+    /// <summary>
+    /// Kullanıcıya klasör seçtirir ve geçerli seçimi kullanici.json dosyasına kaydeder.
+    /// </summary>
+    public static string? KokKlasoruSecVeKaydet()
     {
-        if (args == null || args.Length == 0)
+        string? secilen = KlasorSecDialog();
+        if (!string.IsNullOrWhiteSpace(secilen) && KokYapilandirma.KokErisilebilirMi(secilen))
         {
-            return null;
-        }
-
-        for (int i = 0; i < args.Length; i++)
-        {
-            if (string.Equals(args[i], "--kok", StringComparison.OrdinalIgnoreCase))
-            {
-                if (i + 1 < args.Length)
-                {
-                    return args[i + 1];
-                }
-            }
-            else if (args[i].StartsWith("--kok=", StringComparison.OrdinalIgnoreCase))
-            {
-                return args[i].Substring("--kok=".Length).Trim('"', '\'');
-            }
+            KokYapilandirma.Kaydet(secilen);
+            return secilen;
         }
 
         return null;
+    }
+
+    private static string? KlasorSecDialog()
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Ders videoları kök klasörünü seçin",
+            Multiselect = false
+        };
+
+        bool? sonuc = dialog.ShowDialog();
+        return (sonuc == true && !string.IsNullOrWhiteSpace(dialog.FolderName))
+            ? dialog.FolderName
+            : null;
+    }
+
+    private static string? ParseKokArgumani(string[] args)
+    {
+        return KokYapilandirma.ParseKokArgumani(args);
     }
 
     private void SetupHataYakali()

@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Portal.Cekirdek;
 
 namespace Portal.Uygulama;
@@ -15,11 +16,16 @@ namespace Portal.Uygulama;
 /// </summary>
 public partial class AramaPenceresi : Window
 {
-    private readonly string _kokKlasor;
-    private readonly IAramaMotoru _aramaMotoru;
+    private string _kokKlasor;
+    private IAramaMotoru _aramaMotoru;
     private readonly DispatcherTimer _aramaZamanlayici;
     private readonly ObservableCollection<DersKaydi> _dersler = [];
     private readonly ObservableCollection<SonucGorunumu> _sonuclar = [];
+
+    /// <summary>
+    /// Geçerli kök klasör yolu.
+    /// </summary>
+    public string KokKlasor => _kokKlasor;
 
     public AramaPenceresi()
         : this(Directory.GetCurrentDirectory())
@@ -36,6 +42,7 @@ public partial class AramaPenceresi : Window
         SonucListesi.ItemsSource = _sonuclar;
 
         DurumKullanici.Text = $"Kullanıcı: {Kimlik.Varsayilan.KullaniciAdi()}";
+        DurumKok.Text = $"Kök: {_kokKlasor}";
         DurumBilgisi.Text = "Hazır";
 
         _aramaZamanlayici = new DispatcherTimer
@@ -93,6 +100,70 @@ public partial class AramaPenceresi : Window
         {
             IlerlemeCubugu.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private async void KokDegistirButonu_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Ders videoları kök klasörünü seçin",
+            Multiselect = false,
+            InitialDirectory = Directory.Exists(_kokKlasor) ? _kokKlasor : string.Empty
+        };
+
+        if (dialog.ShowDialog(this) == true && !string.IsNullOrWhiteSpace(dialog.FolderName))
+        {
+            await KokDegistirAsync(dialog.FolderName);
+        }
+    }
+
+    /// <summary>
+    /// Kök klasörü günceller, ayarı kaydeder ve arama indeksini yeniden oluşturur.
+    /// </summary>
+    public async Task KokDegistirAsync(string yeniKok)
+    {
+        if (string.IsNullOrWhiteSpace(yeniKok) || !KokYapilandirma.KokErisilebilirMi(yeniKok))
+        {
+            MessageBox.Show(
+                this,
+                $"Kök klasöre erişilemiyor: {yeniKok}",
+                "Kök Klasör Hatası",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+            return;
+        }
+
+        try
+        {
+            KokYapilandirma.Kaydet(yeniKok);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"Ayar kaydedilemedi:\n{ex.Message}",
+                "Hata",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            return;
+        }
+
+        _kokKlasor = yeniKok;
+        DurumKok.Text = $"Kök: {_kokKlasor}";
+
+        if (_aramaMotoru is IDisposable disp)
+        {
+            disp.Dispose();
+        }
+        _aramaMotoru = new MetinAramaMotoru(new IndeksOnbellek(), new DuzeltmeDeposu(_kokKlasor));
+
+        AramaKutusu.Text = string.Empty;
+        _sonuclar.Clear();
+        SonucSayisiMetni.Text = "Arama Sonuçları";
+
+        await IndeksleAsync();
     }
 
     private void AramaKutusu_TextChanged(object sender, TextChangedEventArgs e)

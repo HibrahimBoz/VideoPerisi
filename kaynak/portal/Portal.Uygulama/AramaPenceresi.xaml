@@ -14,8 +14,14 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Arama Kutusu -->
+        <!-- Arama Kutusu ve Kök Değiştirme -->
         <DockPanel Grid.Row="0" Margin="12,12,12,6">
+            <Button x:Name="KokDegistirButonu" DockPanel.Dock="Right" Content="Kök Klasörü Değiştir"
+                    Margin="8,0,0,0" Padding="12,4"
+                    Background="#2B313C" Foreground="#F1F2F4"
+                    BorderBrush="#3A3F4B" BorderThickness="1"
+                    FontWeight="SemiBold" Cursor="Hand"
+                    Click="KokDegistirButonu_Click"/>
             <TextBlock Text="Ara:" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"
                        Margin="0,0,8,0" Foreground="#F1F2F4"/>
             <TextBox x:Name="AramaKutusu" FontSize="14" Padding="6,4"
@@ -109,6 +115,10 @@
             <Separator Background="#2D3748" Margin="8,0"/>
             <StatusBarItem>
                 <TextBlock x:Name="DurumKullanici" Text="Kullanıcı: -"/>
+            </StatusBarItem>
+            <Separator Background="#2D3748" Margin="8,0"/>
+            <StatusBarItem>
+                <TextBlock x:Name="DurumKok" Text="Kök: -"/>
             </StatusBarItem>
             <Separator Background="#2D3748" Margin="8,0"/>
             <StatusBarItem>
