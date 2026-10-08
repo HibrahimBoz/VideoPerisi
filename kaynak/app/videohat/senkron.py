@@ -293,6 +293,8 @@ def olc(
         ofset_bagil, p_guven = gcc_phat(ref_parca, x_parca, is_sr, max_gecikme_sn=None)
         # Mutlak ofset dönüşümü: ofset_bagil = ofset_mutlak + (t_sn - t_x_bas)
         ofset_mutlak = ofset_bagil - (t_sn - t_x_bas)
+        if abs(ofset_mutlak) > max_gecikme_sn:
+            p_guven = 0.0  # izinli aralık dışındaki tepe geçersiz sayılır
         pencere_olcumleri.append((float(t_sn), float(ofset_mutlak), float(p_guven)))
 
     if len(pencere_olcumleri) == 0:

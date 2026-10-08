@@ -211,6 +211,25 @@ class TestSenkronMotoru(unittest.TestCase):
         if not sonuc.guvenilir:
             self.assertLess(sonuc.guven, 0.6, "Güvenilmez sonuç yüksek güvenle verilmemeli")
 
+    def test_ofset_sinir_disi_reddedilir(self) -> None:
+        """Gerçek ofset max_gecikme_sn dışındaysa sonuç güvenilir OLMAMALI."""
+        sr = 8000
+        ref = _sentetik_konusma(80.0, sr=sr, tohum=7001)
+        gecikme_ornek = int(round(15.0 * sr))
+        x = np.zeros_like(ref)
+        x[gecikme_ornek:] = ref[: len(ref) - gecikme_ornek]
+        sonuc = olc(ref, x, sr=sr, pencere_sn=25.0, adet=5, max_gecikme_sn=10.0)
+        self.assertFalse(sonuc.guvenilir, "Sınır dışı ofset güvenilir sayılmamalı")
+
+    def test_iliskisiz_sinyaller_cok_tohum(self) -> None:
+        """İlişkisiz iki sinyal, 10 farklı tohumda hiç güvenilir çıkmamalı."""
+        sr = 8000
+        for tohum in range(8100, 8110):
+            ref = _sentetik_konusma(80.0, sr=sr, tohum=tohum)
+            x = _sentetik_konusma(80.0, sr=sr, tohum=tohum + 500)
+            sonuc = olc(ref, x, sr=sr, pencere_sn=25.0, adet=5, max_gecikme_sn=10.0)
+            self.assertFalse(sonuc.guvenilir, f"tohum {tohum}: ilişkisiz sinyal güvenilir çıktı")
+
     def test_senaryo_4_yanki_ve_kazanc(self) -> None:
         """Senaryo 4: Yankı (üstel azalan impuls yanıt, RT60~0.5 s) + farklı kazanç -> hata <= 40 ms."""
         sr = 8000
@@ -227,8 +246,10 @@ class TestSenkronMotoru(unittest.TestCase):
         alfa = 3.0 * math.log(10.0) / 0.5  # ~13.8155
         rng = np.random.default_rng(4045)
         rir = rng.standard_normal(n_rir) * np.exp(-alfa * t_rir)
-        rir[0] = 1.0  # Doğrudan yol baskın
-        rir = rir / np.sum(np.abs(rir))
+        # Gerçekçi oda: doğrudan-yankı enerji oranı (DRR) -6 dB (doğrudan yol, kuyruk enerjisinin yarısı kadar genlik)
+        rir[0] = 0.0
+        rir[0] = 0.5 * float(np.sqrt(np.sum(rir ** 2)))
+        rir = rir / np.sqrt(np.sum(rir ** 2))
 
         # Konvolüsyon ve farklı kazanç (gain = 1.4)
         n_conv = len(x_temiz) + n_rir
