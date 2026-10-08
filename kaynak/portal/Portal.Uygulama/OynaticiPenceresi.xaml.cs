@@ -470,6 +470,7 @@ public partial class OynaticiPenceresi : Window
     /// </summary>
     private void HizSecici_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_oynatici == null) return; // InitializeComponent sırasında ilk seçim olayı erken tetiklenir
         if (HizSecici.SelectedItem is ComboBoxItem item &&
             double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out double hiz))
         {
