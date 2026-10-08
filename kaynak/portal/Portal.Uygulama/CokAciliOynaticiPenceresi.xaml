@@ -1,0 +1,63 @@
+<Window x:Class="Portal.Uygulama.CokAciliOynaticiPenceresi"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        Title="Çok açılı oynatıcı" Width="1280" Height="800"
+        MinWidth="900" MinHeight="560" Background="#17191D"
+        Foreground="#F1F2F4" KeyDown="Pencere_KeyDown"
+        Closing="Pencere_Closing">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <WrapPanel Grid.Row="0" Margin="0,0,0,8" VerticalAlignment="Center">
+            <Button Content="Izgara 2×2" Click="Izgara_Click" Margin="0,0,6,4" Padding="10,5"/>
+            <Button Content="Izgara 1×3" Click="UcIzgara_Click" Margin="0,0,6,4" Padding="10,5"/>
+            <Button Content="Izgara 1×2" Click="IkiIzgara_Click" Margin="0,0,6,4" Padding="10,5"/>
+            <Button Content="Odak" Click="Odak_Click" Margin="0,0,6,4" Padding="10,5"/>
+            <Button Content="Tek" Click="Tek_Click" Margin="0,0,14,4" Padding="10,5"/>
+            <TextBlock Text="Ses:" VerticalAlignment="Center" Margin="0,0,5,4"/>
+            <ComboBox x:Name="SesKanaliSecici" Width="130" Margin="0,0,12,4"
+                      SelectionChanged="SesKanaliSecici_SelectionChanged"/>
+            <Button Content="Elle hizala" Click="ElleHizala_Click" Margin="0,0,6,4" Padding="10,5"/>
+            <Button Content="Ofsetleri dışa aktar" Click="OfsetDisaAktar_Click" Margin="0,0,6,4" Padding="10,5"/>
+        </WrapPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="2*"/>
+            </Grid.ColumnDefinitions>
+            <Grid x:Name="VideoIzgarasi" Grid.Column="0" Background="#101114"/>
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"/>
+            <DockPanel Grid.Column="2" LastChildFill="True" Margin="8,0,0,0">
+                <TextBlock DockPanel.Dock="Top" Text="Transkript" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <TextBlock x:Name="TranskriptDurumu" DockPanel.Dock="Bottom" Foreground="#B9BEC7"
+                           TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <ListBox x:Name="TranskriptListesi" Background="#202329" Foreground="#F1F2F4"
+                         BorderThickness="0" SelectionChanged="TranskriptListesi_SelectionChanged"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Gosterim}" TextWrapping="Wrap" Margin="7,5"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+
+        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+            <Button x:Name="OynatDurdurDugmesi" DockPanel.Dock="Left" Content="Oynat" Click="OynatDurdur_Click"
+                    Margin="0,0,10,0" Padding="12,5"/>
+            <TextBlock x:Name="ZamanMetni" DockPanel.Dock="Right" Text="00:00 / 00:00"
+                       VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <Slider x:Name="ZamanKaydiraci" Minimum="0" Maximum="1" Value="0"
+                    ValueChanged="ZamanKaydiraci_ValueChanged"
+                    PreviewMouseLeftButtonUp="ZamanKaydiraci_MouseLeftButtonUp"
+                    KeyUp="ZamanKaydiraci_KeyUp"/>
+        </DockPanel>
+    </Grid>
+</Window>
