@@ -1,0 +1,119 @@
+<Window x:Class="Portal.Uygulama.AramaPenceresi"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Portal.Uygulama"
+        Title="Video Portalı - Ders Arama" Width="1100" Height="720"
+        MinWidth="800" MinHeight="500"
+        Background="#17191D" Foreground="#F1F2F4"
+        Loaded="Pencere_Loaded">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Arama Kutusu -->
+        <DockPanel Grid.Row="0" Margin="12,12,12,6">
+            <TextBlock Text="Ara:" VerticalAlignment="Center" FontSize="14" FontWeight="SemiBold"
+                       Margin="0,0,8,0" Foreground="#F1F2F4"/>
+            <TextBox x:Name="AramaKutusu" FontSize="14" Padding="6,4"
+                     Background="#202329" Foreground="#F1F2F4" BorderBrush="#3A3F4B"
+                     TextChanged="AramaKutusu_TextChanged"
+                     KeyDown="AramaKutusu_KeyDown"/>
+        </DockPanel>
+
+        <!-- İlerleme Göstergesi -->
+        <ProgressBar x:Name="IlerlemeCubugu" Grid.Row="1" Height="4" Margin="12,0,12,6"
+                     Minimum="0" Maximum="100" Value="0"
+                     Visibility="Collapsed" Background="#202329" Foreground="#3182CE"/>
+
+        <!-- Ana Alan: Ders Listesi ve Arama Sonuçları -->
+        <Grid Grid.Row="2" Margin="12,0,12,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" MinWidth="180"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Sol Panel: Ders Listesi Paneli -->
+            <DockPanel Grid.Column="0">
+                <TextBlock x:Name="DersListesiBaslik" DockPanel.Dock="Top" Text="Dersler (0)"
+                           FontWeight="SemiBold" FontSize="13" Foreground="#B9BEC7" Margin="0,0,0,6"/>
+                <ListBox x:Name="DersListesi" Background="#202329" Foreground="#F1F2F4"
+                         BorderBrush="#3A3F4B" BorderThickness="1"
+                         MouseDoubleClick="DersListesi_MouseDoubleClick"
+                         KeyDown="DersListesi_KeyDown">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="4,2">
+                                <TextBlock Text="{Binding Ad}" Foreground="#F1F2F4" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- GridSplitter Bölücü -->
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="#17191D"/>
+
+            <!-- Sağ Panel: Arama Sonuçları ListView -->
+            <DockPanel Grid.Column="2">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock x:Name="SonucSayisiMetni" DockPanel.Dock="Left" Text="Arama Sonuçları"
+                               FontWeight="SemiBold" FontSize="13" Foreground="#B9BEC7"/>
+                </DockPanel>
+                <ListView x:Name="SonucListesi" Background="#202329" Foreground="#F1F2F4"
+                          BorderBrush="#3A3F4B" BorderThickness="1" SelectionMode="Single"
+                          MouseDoubleClick="SonucListesi_MouseDoubleClick"
+                          KeyDown="SonucListesi_KeyDown">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Ders" Width="180">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DersAd}" Foreground="#90CDF4" FontWeight="Medium"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Zaman" Width="80">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding ZamanMetni}" Foreground="#E2E8F0"
+                                                   FontFamily="Consolas, monospace"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Cümle" Width="550">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock local:VurguYardimcisi.VurguBilgisi="{Binding}"
+                                                   TextWrapping="Wrap" Foreground="#F1F2F4"/>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </DockPanel>
+        </Grid>
+
+        <!-- Durum Çubuğu -->
+        <StatusBar Grid.Row="3" Background="#101114" Foreground="#A0AEC0"
+                   BorderBrush="#2D3748" BorderThickness="0,1,0,0" Padding="8,4">
+            <StatusBarItem>
+                <TextBlock x:Name="DurumDersSayisi" Text="Ders: 0"/>
+            </StatusBarItem>
+            <Separator Background="#2D3748" Margin="8,0"/>
+            <StatusBarItem>
+                <TextBlock x:Name="DurumKullanici" Text="Kullanıcı: -"/>
+            </StatusBarItem>
+            <Separator Background="#2D3748" Margin="8,0"/>
+            <StatusBarItem>
+                <TextBlock x:Name="DurumBilgisi" Text="Hazır"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>

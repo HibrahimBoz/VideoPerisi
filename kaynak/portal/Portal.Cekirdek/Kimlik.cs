@@ -27,6 +27,8 @@ public class Kimlik : IKimlik
         set => _varsayilan = value ?? new Kimlik();
     }
 
+
+
     /// <summary>
     /// Geçerli kullanıcının adını döndürür (WindowsIdentity veya ortam fallback).
     /// </summary>

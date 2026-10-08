@@ -10,6 +10,7 @@ using LibVLCSharp.Shared;
 using LibVLCSharp.WPF;
 using Microsoft.Win32;
 using Portal.Cekirdek;
+using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace Portal.Uygulama;
 
@@ -128,7 +129,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         }
 
         // ders.json yoksa tek video modunda oynatıcı açılır
-        var tekliPencere = new CokAciliOynaticiPenceresi(kayit, baslangicSanalSn);
+        var tekliPencere = new OynaticiPenceresi(kayit, baslangicSanalSn);
         tekliPencere.Show();
         return tekliPencere;
     }
@@ -887,11 +888,11 @@ public partial class CokAciliOynaticiPenceresi : Window
             : $"{(int)sure.TotalMinutes:00}:{sure.Seconds:00}";
     }
 
-    private sealed class KanalGorunumu(Kanal kanal, MediaPlayer oynatici, VideoView video, Grid karo,
+    private sealed class KanalGorunumu(Kanal kanal, LibVLCSharp.Shared.MediaPlayer oynatici, VideoView video, Grid karo,
         TextBlock griKutusu, TextBlock etiket)
     {
         public Kanal Kanal { get; } = kanal;
-        public MediaPlayer Oynatici { get; } = oynatici;
+        public LibVLCSharp.Shared.MediaPlayer Oynatici { get; } = oynatici;
         public VideoView Video { get; } = video;
         public Grid Karo { get; } = karo;
         public TextBlock GriKutusu { get; } = griKutusu;

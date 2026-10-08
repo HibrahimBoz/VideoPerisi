@@ -71,4 +71,16 @@ public class KimlikTestleri
         string sonuc = DuzeltmeDeposu.GuvenliKullaniciAdi(girdi);
         Assert.Equal(beklenen, sonuc);
     }
+
+    [Fact]
+    public void Kimlik_StatikMetotlar_VarsayilanKimlikDegerleriniDoner()
+    {
+        string kullanici = Kimlik.Varsayilan.KullaniciAdi();
+        string makine = Kimlik.Varsayilan.MakineAdi();
+
+        Assert.False(string.IsNullOrWhiteSpace(kullanici));
+        Assert.False(string.IsNullOrWhiteSpace(makine));
+        Assert.Equal(Kimlik.Varsayilan.KullaniciAdi(), kullanici);
+        Assert.Equal(Kimlik.Varsayilan.MakineAdi(), makine);
+    }
 }
