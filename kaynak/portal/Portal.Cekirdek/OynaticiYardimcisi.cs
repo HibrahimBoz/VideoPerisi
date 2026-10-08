@@ -15,16 +15,16 @@ public static class OynaticiYardimcisi
     public static readonly double[] DesteklenenHizlar = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
     /// <summary>
-    /// Başlangıç saniyesinden 2 saniye öncesini hesaplar (en az 0 saniye).
+    /// Başlangıç saniyesini geçerli aralığa normalize eder.
     /// </summary>
     public static double BaslangicZamaniHesapla(double baslangicSn)
     {
-        if (double.IsNaN(baslangicSn) || double.IsInfinity(baslangicSn) || baslangicSn <= 2.0)
+        if (double.IsNaN(baslangicSn) || double.IsInfinity(baslangicSn) || baslangicSn < 0)
         {
             return 0.0;
         }
 
-        return Math.Max(0.0, baslangicSn - 2.0);
+        return baslangicSn;
     }
 
     /// <summary>
