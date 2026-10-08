@@ -145,7 +145,15 @@ public partial class DuzenlemePaneli : UserControl
         }
 
         CakismaRozeti.Visibility = segment.Cakisma ? Visibility.Visible : Visibility.Collapsed;
-        GeriAlDugmesi.IsEnabled = segment.Gecmis.Count > 0;
+        GeriAlDugmesi.IsEnabled = Duzeltme.GeriAlIzinVerilir(segment);
+        if (segment.Cakisma)
+        {
+            DurumMetni.Text = "Önce çakışmayı çözün: bir sürümü seçip Kaydet";
+        }
+        else if (DurumMetni.Text == "Önce çakışmayı çözün: bir sürümü seçip Kaydet")
+        {
+            DurumMetni.Text = string.Empty;
+        }
 
         // Geçmiş listesini doldur
         var gecmisOgeleri = segment.Gecmis
@@ -214,13 +222,25 @@ public partial class DuzenlemePaneli : UserControl
     /// </summary>
     private void GeriAl_Click(object sender, RoutedEventArgs e)
     {
-        if (_seciliSegment == null || _seciliSegment.Gecmis.Count == 0)
+        if (_seciliSegment == null)
+        {
+            DurumMetni.Text = "Segment seçilmedi.";
+            return;
+        }
+
+        if (_seciliSegment.Cakisma)
+        {
+            DurumMetni.Text = "Önce çakışmayı çözün: bir sürümü seçip Kaydet";
+            return;
+        }
+
+        if (!Duzeltme.GeriAlIzinVerilir(_seciliSegment))
         {
             DurumMetni.Text = "Geri alınacak kayıt yok.";
             return;
         }
 
-        var geriAl = Duzeltme.GeriAlKaydiUret(_seciliSegment.Gecmis, Kimlik.Varsayilan);
+        var geriAl = Duzeltme.GeriAlKaydiUret(_seciliSegment, Kimlik.Varsayilan);
         if (geriAl == null)
         {
             DurumMetni.Text = "Geri alınacak kayıt yok.";

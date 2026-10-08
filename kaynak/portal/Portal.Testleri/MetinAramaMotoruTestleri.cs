@@ -836,4 +836,106 @@ public class MetinAramaMotoruTestleri : IDisposable
         Assert.Single(sonuclarKimya);
         Assert.Equal(jsonB, sonuclarKimya[0].JsonYolu);
     }
+
+    [Fact]
+    public async Task IndekslemeSirasinda_DersiYenile_SonuctaKaybolmaz()
+    {
+        var ders1 = OrnekDersUret("ders1", _geciciKlasor);
+        var ders2 = OrnekDersUret("ders2", _geciciKlasor);
+
+        var transkript1Eski = new Transkript
+        {
+            Ad = ders1.Ad,
+            JsonYolu = ders1.JsonYolu,
+            Segmentler = new List<Segment>
+            {
+                new(0, 0.0, 5.0, "Eski Metin Bir")
+            }
+        };
+
+        var transkript1Yeni = new Transkript
+        {
+            Ad = ders1.Ad,
+            JsonYolu = ders1.JsonYolu,
+            Segmentler = new List<Segment>
+            {
+                new(0, 0.0, 5.0, "Yepyeni Guncel Metin Bir")
+            }
+        };
+
+        var transkript2 = new Transkript
+        {
+            Ad = ders2.Ad,
+            JsonYolu = ders2.JsonYolu,
+            Segmentler = new List<Segment>
+            {
+                new(0, 0.0, 5.0, "Ders Iki Metni")
+            }
+        };
+
+        bool ilkOkuma = true;
+        MetinAramaMotoru? motorRef = null;
+
+        Transkript Okuyucu(string yol)
+        {
+            if (yol.Contains("ders1", StringComparison.OrdinalIgnoreCase))
+            {
+                if (ilkOkuma)
+                {
+                    ilkOkuma = false;
+                    return transkript1Eski;
+                }
+                return transkript1Yeni;
+            }
+
+            // ders2 okunurken (yani indeksleme arka planda devam ederken) ders1 yenileniyor
+            if (yol.Contains("ders2", StringComparison.OrdinalIgnoreCase) && motorRef != null)
+            {
+                motorRef.DersiYenile(ders1);
+            }
+
+            return transkript2;
+        }
+
+        using var motor = new MetinAramaMotoru(transkriptOkuyucu: Okuyucu);
+        motorRef = motor;
+
+        await motor.IndeksleAsync(new[] { ders1, ders2 });
+
+        // İndeksleme sonrasında DersiYenile ile güncellenen metin korunmalı
+        var sonuclar = motor.Ara("Yepyeni Guncel Metin");
+        Assert.Single(sonuclar);
+        Assert.Equal("Yepyeni Guncel Metin Bir", sonuclar[0].Metin);
+
+        // Eski metin ise ezilmiş olmalı
+        var eskiSonuclar = motor.Ara("Eski Metin Bir");
+        Assert.Empty(eskiSonuclar);
+    }
+
+    [Fact]
+    public async Task IndeksleAsync_IptalEdildiginde_SonucYayimlanmaz()
+    {
+        var ders1 = OrnekDersUret("ders1", _geciciKlasor);
+        var transkript1 = new Transkript
+        {
+            Ad = ders1.Ad,
+            JsonYolu = ders1.JsonYolu,
+            Segmentler = new List<Segment> { new(0, 0.0, 5.0, "Iptal Metni") }
+        };
+
+        using var cts = new CancellationTokenSource();
+        using var motor = new MetinAramaMotoru(transkriptOkuyucu: _ =>
+        {
+            cts.Cancel();
+            return transkript1;
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await motor.IndeksleAsync(new[] { ders1 }, iptal: cts.Token);
+        });
+
+        var sonuclar = motor.Ara("Iptal Metni");
+        Assert.Empty(sonuclar);
+    }
 }

@@ -155,6 +155,59 @@ public class Duzeltme
     }
 
     /// <summary>
+    /// Segment üzerinde geri alma işlemine izin verilip verilmediğini döner.
+    /// Çakışma durumunda (Cakisma == true) veya geri alınacak hedef yoksa false döner.
+    /// </summary>
+    public static bool GeriAlIzinVerilir(EfektifSegment? segment)
+    {
+        if (segment == null || segment.Cakisma || segment.Gecmis == null || segment.Gecmis.Count == 0)
+        {
+            return false;
+        }
+
+        return GeriAlinacakHedef(segment.Gecmis) != null;
+    }
+
+    /// <summary>
+    /// Geçmiş listesi ve çakışma durumuna göre geri alma işlemine izin verilip verilmediğini döner.
+    /// </summary>
+    public static bool GeriAlIzinVerilir(IReadOnlyList<Duzeltme>? gecmis, bool cakisma = false)
+    {
+        if (cakisma || gecmis == null || gecmis.Count == 0)
+        {
+            return false;
+        }
+
+        return GeriAlinacakHedef(gecmis) != null;
+    }
+
+    /// <summary>
+    /// Efektif segmente göre geri alma kaydı üretir. Çakışma varsa null döner.
+    /// </summary>
+    public static Duzeltme? GeriAlKaydiUret(EfektifSegment? segment, IKimlik? kimlik = null, string istemci = "1.0.0")
+    {
+        if (segment == null || segment.Cakisma)
+        {
+            return null;
+        }
+
+        return GeriAlKaydiUret(segment.Gecmis, kimlik, istemci);
+    }
+
+    /// <summary>
+    /// Çakışma bayrağı dikkate alınarak geri alma kaydı üretir. Çakışma varsa null döner.
+    /// </summary>
+    public static Duzeltme? GeriAlKaydiUret(IReadOnlyList<Duzeltme>? gecmis, bool cakisma, IKimlik? kimlik = null, string istemci = "1.0.0")
+    {
+        if (cakisma)
+        {
+            return null;
+        }
+
+        return GeriAlKaydiUret(gecmis, kimlik, istemci);
+    }
+
+    /// <summary>
     /// Geçmişteki geri alınmamış son düzeltmeyi bulup, zincir ucuna bağlanan yeni bir geri_al kaydı üretir.
     /// Geri alınacak kayıt yoksa null döner.
     /// </summary>
