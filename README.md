@@ -1,0 +1,21 @@
+# Video Perisi
+
+Kapalı ağda (internetsiz) Türkçe ağırlıklı ders videoları için iki ürün:
+
+1. **Video Perisi** (`kaynak/app/videohat`, Python): videodan transkript (SRT/VTT/TXT/JSON) çıkarır, sesi ve görüntüyü iyileştirir. Motor: faster-whisper (large-v3). Elektronik harp terim sözlüğü (`kaynak/terimler.txt`) ve düzeltme katmanı içerir. Çok kameralı ve parçalı kayıtlar için `isle-grup` komutu ve ses tabanlı senkron (`senkron.py`, `parca_zinciri.py`, `ders_json.py`) vardır.
+2. **Video Portalı** (`kaynak/portal`, .NET 8 + WPF + LibVLCSharp): işlenmiş dersleri arar, transkriptteki cümleye tıklayınca videoyu o dakikada açar, çok açılı dersleri senkron oynatır. Düzenleme modu parola ister; her düzeltme ayrı dosyadır ve kim yazdığı kaydedilir.
+
+## Derleme ve test
+```
+dotnet build kaynak/portal/Portal.sln
+dotnet test  kaynak/portal/Portal.sln
+python -m unittest discover -s kaynak/tests -p "test_*.py"   # PYTHONPATH=kaynak/app
+```
+Portalı yayınlamak: `dotnet publish kaynak/portal/Portal.Uygulama/Portal.Uygulama.csproj -c Release -r win-x64 --self-contained`.
+
+## Bilinen sınırlar (ölçüldü)
+- libvlc, `\\sunucu\paylaşım\...` yazımını açamaz; portal bunu `//sunucu/paylaşım/...` biçimine çevirir (`VlcYolu`).
+- Ağ paylaşımındaki `.exe` Windows "Dosya Aç - Güvenlik Uyarısı" gösterir; portalı yerel diskten çalıştırın veya sunucuyu "Yerel intranet" bölgesine alın.
+- Çok açılı oynatıcı ve düzenleme arayüzü gerçek derste ve Windows 10'da denenmedi.
+
+Üçüncü taraf bileşenler (ffmpeg, libvlc, faster-whisper, modeller) bu depoda yoktur; kendi lisanslarına tabidir.
