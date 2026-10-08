@@ -41,8 +41,22 @@ public class KimlikTestleri
             SahteMakine = "SUNUCU-99"
         };
 
+        var hedef = new Duzeltme
+        {
+            Ders = "test_ders",
+            SegmentNo = 1,
+            Eski = "eski metin",
+            Yeni = "yeni metin",
+            Kullanici = "ORIJINAL\\kisi",
+            Makine = "ORIJINAL-PC"
+        };
+
+        var geriAl = Duzeltme.GeriAlOlustur(hedef, sahte);
+
         Assert.Equal("OZEL\\denetmen", sahte.KullaniciAdi());
         Assert.Equal("SUNUCU-99", sahte.MakineAdi());
+        Assert.Equal("OZEL\\denetmen", geriAl.Kullanici);
+        Assert.Equal("SUNUCU-99", geriAl.Makine);
     }
 
     [Theory]

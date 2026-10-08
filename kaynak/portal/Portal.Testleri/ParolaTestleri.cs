@@ -63,6 +63,21 @@ public class ParolaTestleri : IDisposable
     }
 
     [Fact]
+    public void Olustur_MevcutParolaVarsa_ReddederVeEskiParolaDegismez()
+    {
+        bool ilk = _parolaYonetici.Olustur("IlkParola123");
+        Assert.True(ilk);
+
+        // İkinci kez Olustur çağrıldığında dosya zaten var olduğu için reddedilmeli
+        bool ikinci = _parolaYonetici.Olustur("IkinciParola456");
+        Assert.False(ikinci);
+
+        // Orijinal parola hâlâ geçerli olmalı, yeni parola geçersiz olmalı
+        Assert.True(_parolaYonetici.Dogrula("IlkParola123"));
+        Assert.False(_parolaYonetici.Dogrula("IkinciParola456"));
+    }
+
+    [Fact]
     public void Degistir_GecerliEskiVeYeni_BasariliVeEskiArsivlenir()
     {
         _parolaYonetici.Olustur("EskiParola123");
@@ -167,5 +182,55 @@ public class ParolaTestleri : IDisposable
 
         bool dogrulandi = _parolaYonetici.Dogrula(turkceParola);
         Assert.True(dogrulandi);
+    }
+
+    [Fact]
+    public void Degistir_YeniKayitOncedenHazirlanirVeBasariliDegisimdeEskiArsivlenir()
+    {
+        // Bulgu 3: Yeni kayıt önceden hazırlanır, eski dosya arşive taşınır, yeni parola doğrulanır
+        _parolaYonetici.Olustur("OrijinalParola123");
+        string ilkDosyaIcerik = File.ReadAllText(_parolaYonetici.ParolaDosyaYolu);
+
+        bool sonuc = _parolaYonetici.Degistir("OrijinalParola123", "GuncelParola789");
+        Assert.True(sonuc);
+
+        // Yeni parola etkin olmalı
+        Assert.True(_parolaYonetici.Dogrula("GuncelParola789"));
+        Assert.False(_parolaYonetici.Dogrula("OrijinalParola123"));
+
+        // Arşivlenen dosya orijinal içerikle eşleşmeli
+        var arsivDosyalar = Directory.GetFiles(_parolaYonetici.ArsivKlasorYolu, "*.json");
+        Assert.Single(arsivDosyalar);
+        string arsivIcerik = File.ReadAllText(arsivDosyalar[0]);
+        Assert.Equal(ilkDosyaIcerik, arsivIcerik);
+    }
+
+    [Fact]
+    public void Degistir_GecersizYeniParoladaEskiParolaDosyasiBozulmazVeGecerliKalir()
+    {
+        // Bulgu 3: Yeni parola geçersiz olduğunda eski parola dosyası asla silinmez/kaybolmaz
+        _parolaYonetici.Olustur("GuvenliParola123");
+
+        // Geçersiz yeni parola denemesi (kısa)
+        bool sonuc = _parolaYonetici.Degistir("GuvenliParola123", "kisa");
+        Assert.False(sonuc);
+
+        // Etkin dosya yerinde ve eski parola geçerli kalmalı
+        Assert.True(File.Exists(_parolaYonetici.ParolaDosyaYolu));
+        Assert.True(_parolaYonetici.Dogrula("GuvenliParola123"));
+    }
+
+    [Fact]
+    public void Degistir_KullaniciBelirtilirseDegistirenAlaniDogruKaydedilir()
+    {
+        _parolaYonetici.Olustur("IlkParola123", degistiren: "SISTEM\\yonetici1");
+
+        bool degisti = _parolaYonetici.Degistir("IlkParola123", "IkinciParola456", degistiren: "DOMAIN\\yonetici2");
+        Assert.True(degisti);
+
+        string json = File.ReadAllText(_parolaYonetici.ParolaDosyaYolu);
+        var kayit = JsonSerializer.Deserialize<ParolaKaydi>(json);
+        Assert.NotNull(kayit);
+        Assert.Equal("DOMAIN\\yonetici2", kayit.Degistiren);
     }
 }

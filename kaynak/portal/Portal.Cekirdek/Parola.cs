@@ -55,6 +55,7 @@ public class Parola
 
     /// <summary>
     /// Yeni parola oluşturup .portal/parola.json dosyasına kaydeder.
+    /// Mevcut parola dosyası varsa reddeder (değiştirme yalnızca Degistir ile yapılmalıdır).
     /// </summary>
     public bool Olustur(string parola, string? degistiren = null)
     {
@@ -63,10 +64,22 @@ public class Parola
             return false;
         }
 
+        if (File.Exists(ParolaDosyaYolu))
+        {
+            return false;
+        }
+
+        string portalKlasor = Path.Combine(_kokKlasor, ".portal");
+        string tmpDosya = Path.Combine(portalKlasor, $"parola_{Guid.NewGuid():N}.tmp");
+
         try
         {
-            string portalKlasor = Path.Combine(_kokKlasor, ".portal");
             Directory.CreateDirectory(portalKlasor);
+
+            if (File.Exists(ParolaDosyaYolu))
+            {
+                return false;
+            }
 
             byte[] tuz = RandomNumberGenerator.GetBytes(TuzUzunluguBayt);
             byte[] ozet = Rfc2898DeriveBytes.Pbkdf2(
@@ -87,7 +100,6 @@ public class Parola
             };
 
             string json = JsonSerializer.Serialize(kayit);
-            string tmpDosya = Path.Combine(portalKlasor, $"parola_{Guid.NewGuid():N}.tmp");
 
             using (var fs = new FileStream(tmpDosya, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
@@ -96,11 +108,22 @@ public class Parola
                 fs.Flush(true);
             }
 
-            File.Move(tmpDosya, ParolaDosyaYolu, overwrite: true);
+            File.Move(tmpDosya, ParolaDosyaYolu, overwrite: false);
             return true;
         }
         catch
         {
+            try
+            {
+                if (File.Exists(tmpDosya))
+                {
+                    File.Delete(tmpDosya);
+                }
+            }
+            catch
+            {
+                // Temizlik istisnasını yut
+            }
             return false;
         }
     }
@@ -165,7 +188,8 @@ public class Parola
     }
 
     /// <summary>
-    /// Parolayı doğrular, eski dosyayı .portal/parola_arsiv/ altına taşır ve yeni parolayı kaydeder.
+    /// Parolayı doğrular, yeni kaydı hazırlar, eski dosyayı .portal/parola_arsiv/ altına taşır ve yeni parolayı kaydeder.
+    /// Yeni kayıt veya taşıma başarısız olursa eski dosyayı geri yükler.
     /// </summary>
     public bool Degistir(string eskiParola, string yeniParola, string? degistiren = null)
     {
@@ -179,20 +203,83 @@ public class Parola
             return false;
         }
 
+        string portalKlasor = Path.Combine(_kokKlasor, ".portal");
+        string tmpDosya = Path.Combine(portalKlasor, $"parola_{Guid.NewGuid():N}.tmp");
+        string? arsivYolu = null;
+        bool tasindi = false;
+
         try
         {
+            Directory.CreateDirectory(portalKlasor);
             Directory.CreateDirectory(ArsivKlasorYolu);
 
+            // 1. Yeni kaydı önce hazırla (.tmp olarak diske yaz ve flush et)
+            byte[] tuz = RandomNumberGenerator.GetBytes(TuzUzunluguBayt);
+            byte[] ozet = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(yeniParola),
+                tuz,
+                StandartIterasyon,
+                HashAlgorithmName.SHA256,
+                OzetUzunluguBayt);
+
+            var kayit = new ParolaKaydi
+            {
+                Alg = StandartAlgoritma,
+                Iter = StandartIterasyon,
+                Tuz = Convert.ToBase64String(tuz),
+                Ozet = Convert.ToBase64String(ozet),
+                Degistiren = degistiren ?? _kimlik.KullaniciAdi(),
+                Zaman = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)
+            };
+
+            string json = JsonSerializer.Serialize(kayit);
+            using (var fs = new FileStream(tmpDosya, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(json);
+                fs.Write(bytes, 0, bytes.Length);
+                fs.Flush(true);
+            }
+
+            // 2. Eski dosyayı arşive taşı
             string zamanStr = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmssfff'Z'", CultureInfo.InvariantCulture);
             string arsivDosyaAdi = $"parola_{zamanStr}_{Guid.NewGuid():N}.json";
-            string arsivYolu = Path.Combine(ArsivKlasorYolu, arsivDosyaAdi);
+            arsivYolu = Path.Combine(ArsivKlasorYolu, arsivDosyaAdi);
 
             File.Move(ParolaDosyaYolu, arsivYolu);
+            tasindi = true;
 
-            return Olustur(yeniParola, degistiren);
+            // 3. Hazırlanmış yeni parolayı etkin parola dosyası yap
+            File.Move(tmpDosya, ParolaDosyaYolu, overwrite: true);
+            return true;
         }
         catch
         {
+            // Yeni kayıt veya taşıma başarısızsa eski dosyayı geri yükle
+            if (tasindi && arsivYolu != null && File.Exists(arsivYolu) && !File.Exists(ParolaDosyaYolu))
+            {
+                try
+                {
+                    File.Move(arsivYolu, ParolaDosyaYolu);
+                }
+                catch
+                {
+                    // Geri yükleme hatasını yut
+                }
+            }
+
+            // Tmp dosya temizliği
+            try
+            {
+                if (File.Exists(tmpDosya))
+                {
+                    File.Delete(tmpDosya);
+                }
+            }
+            catch
+            {
+                // Temizlik hatasını yut
+            }
+
             return false;
         }
     }

@@ -420,6 +420,158 @@ public class DuzeltmeDeposuTestleri : IDisposable
     }
 
     [Fact]
+    public void Birlestir_KaynakOzetUyusmazsa_ZincirdekiIkinciDuzeltmeGuncelMetinleEslesirVeYetimOlmaz()
+    {
+        // Bulgu 1: Özet değişince zincirdeki ikinci düzeltme ilk düzeltmenin yeni metnini arar,
+        // güncel metin üzerinden çözülmeli ve yetim olmamalı.
+        var transkript = new Transkript
+        {
+            Ad = "tarih101",
+            KaynakOzet = "yeni_ozet_hash_999",
+            Segmentler = new List<Segment>
+            {
+                new(0, 5.2, 9.0, "Osmanlı Devleti Kuruluş Dönemi") // bas: 5.0 -> 5.2 (±0.5 sn içinde)
+            }
+        };
+
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // İlk düzeltme: "Kuruluş Dönemi" -> "Beylikten Devlete"
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = "eski_farkli_ozet_111",
+            SegmentNo = 12,
+            Bas = 5.0,
+            Eski = "Osmanlı Devleti Kuruluş Dönemi",
+            Yeni = "Osmanlı Devleti Beylikten Devlete",
+            ZamanUtc = new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc)
+        };
+
+        // İkinci düzeltme: ilk düzeltmenin Yeni metnini Eski olarak arar
+        var d2 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = "eski_farkli_ozet_111",
+            SegmentNo = 12,
+            Bas = 5.0,
+            Eski = "Osmanlı Devleti Beylikten Devlete",
+            Yeni = "Osmanlı Devleti Klasik Çağ",
+            OncekiId = d1.Id,
+            ZamanUtc = new DateTime(2026, 10, 1, 10, 5, 0, DateTimeKind.Utc)
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+
+        var sonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+
+        Assert.Empty(sonuc.Yetimler);
+        Assert.Equal("Osmanlı Devleti Klasik Çağ", sonuc[0].Metin);
+        Assert.Equal(2, sonuc[0].Gecmis.Count);
+        Assert.False(sonuc[0].Cakisma);
+    }
+
+    [Fact]
+    public void Birlestir_KaynakOzetUyusmazsa_BasZamaniOlmayanDuzeltmeYetimSayilir()
+    {
+        // Bulgu 2: Bas yoksa zaman şartı atlanamaz, aynı metinli yanlış segmente uygulanmamalı, Yetim sayılmalı.
+        var transkript = new Transkript
+        {
+            Ad = "fizik201",
+            KaynakOzet = "yeni_ozet_hash_abc",
+            Segmentler = new List<Segment>
+            {
+                new(0, 0.0, 5.0, "Deney Sonucu Aynı Metin"),
+                new(1, 100.0, 105.0, "Deney Sonucu Aynı Metin")
+            }
+        };
+
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // Bas değeri null olan düzeltme (zaman bilgisi yok)
+        var d = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = "eski_ozet_farkli",
+            SegmentNo = 0,
+            Bas = null, // Zaman yok
+            Eski = "Deney Sonucu Aynı Metin",
+            Yeni = "Yanlış Uygulanmaması Gereken Metin"
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d);
+
+        var sonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+
+        // Düzeltme Yetim sayılmalı, hiçbir segmente uygulanmamalı
+        Assert.Single(sonuc.Yetimler);
+        Assert.Equal(d.Id, sonuc.Yetimler[0].Id);
+        Assert.Equal("Deney Sonucu Aynı Metin", sonuc[0].Metin);
+        Assert.Equal("Deney Sonucu Aynı Metin", sonuc[1].Metin);
+    }
+
+    [Fact]
+    public void Birlestir_KaynakOzetUyusmazsa_CokluZincirVeGeriAlDogruCozulur()
+    {
+        var transkript = new Transkript
+        {
+            Ad = "kimya101",
+            KaynakOzet = "ozet_v2",
+            Segmentler = new List<Segment>
+            {
+                new(0, 12.3, 15.0, "Atom Modelleri Giriş")
+            }
+        };
+
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = "ozet_v1",
+            Bas = 12.1,
+            Eski = "Atom Modelleri Giriş",
+            Yeni = "Bohr Atom Modeli",
+            ZamanUtc = new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc)
+        };
+
+        var d2 = new Duzeltme
+        {
+            Tur = "geri_al",
+            Ders = transkript.Ad,
+            KaynakOzet = "ozet_v1",
+            Bas = 12.1,
+            GeriAlHedef = d1.Id,
+            OncekiId = d1.Id,
+            Eski = "Bohr Atom Modeli",
+            Yeni = "Atom Modelleri Giriş",
+            ZamanUtc = new DateTime(2026, 10, 1, 10, 2, 0, DateTimeKind.Utc)
+        };
+
+        var d3 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = "ozet_v1",
+            Bas = 12.1,
+            OncekiId = d2.Id,
+            Eski = "Atom Modelleri Giriş",
+            Yeni = "Modern Atom Teorisi",
+            ZamanUtc = new DateTime(2026, 10, 1, 10, 4, 0, DateTimeKind.Utc)
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+        _depo.Yaz(duzeltmelerKlasoru, d3);
+
+        var sonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+
+        Assert.Empty(sonuc.Yetimler);
+        Assert.Equal("Modern Atom Teorisi", sonuc[0].Metin);
+        Assert.Equal(3, sonuc[0].Gecmis.Count);
+    }
+
+    [Fact]
     public void DosyaAdi_SpecFormatinaUygunUretilir()
     {
         var d = new Duzeltme

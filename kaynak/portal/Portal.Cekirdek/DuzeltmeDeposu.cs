@@ -316,13 +316,23 @@ public class DuzeltmeDeposu
 
         var segmentDuzeltmeleri = new Dictionary<int, List<Duzeltme>>();
         var yetimler = new List<Duzeltme>();
+        var guncelMetinler = new Dictionary<int, string>();
+        var gecmisMetinler = new Dictionary<int, List<string>>();
 
         foreach (var s in transkript.Segmentler)
         {
             segmentDuzeltmeleri[s.No] = new List<Duzeltme>();
+            guncelMetinler[s.No] = s.Metin;
+            gecmisMetinler[s.No] = new List<string> { s.Metin };
         }
 
-        foreach (var d in tumDuzeltmeler)
+        // Düzeltmeleri zaman sırasına göre çöz: (zaman_utc, id)
+        var siraliTumDuzeltmeler = tumDuzeltmeler
+            .OrderBy(d => d.ZamanUtc)
+            .ThenBy(d => d.Id, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var d in siraliTumDuzeltmeler)
         {
             bool kaynakOzetUyusuyor = KaynakOzetUyusuyor(transkript.KaynakOzet, d.KaynakOzet);
 
@@ -331,6 +341,18 @@ public class DuzeltmeDeposu
                 if (segmentDuzeltmeleri.TryGetValue(d.SegmentNo, out var liste))
                 {
                     liste.Add(d);
+                    string yeniMetin = d.Yeni;
+                    if (string.Equals(d.Tur, "geri_al", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hedef = liste.FirstOrDefault(x => x.Id == d.GeriAlHedef)
+                                 ?? siraliTumDuzeltmeler.FirstOrDefault(x => x.Id == d.GeriAlHedef);
+                        if (hedef != null)
+                        {
+                            yeniMetin = hedef.Eski;
+                        }
+                    }
+                    guncelMetinler[d.SegmentNo] = yeniMetin;
+                    gecmisMetinler[d.SegmentNo].Add(yeniMetin);
                 }
                 else
                 {
@@ -339,11 +361,36 @@ public class DuzeltmeDeposu
             }
             else
             {
-                // Kaynak özet uyuşmazlığında: (bas zamanı ±0.5 s ve eski metin eşleşmesi)
-                Segment? eslesenSegment = SegmentEslestir(transkript.Segmentler, d);
+                // Bulgu 2: Bas yoksa zaman şartı atlanamaz; zaman yoksa düzeltme Yetim sayılır
+                if (!d.Bas.HasValue)
+                {
+                    yetimler.Add(d);
+                    continue;
+                }
+
+                // Bulgu 1: Eşleşeni zamanla bulup zinciri güncel metin üzerinden çöz
+                Segment? eslesenSegment = SegmentEslestir(
+                    transkript.Segmentler,
+                    d,
+                    guncelMetinler,
+                    gecmisMetinler,
+                    segmentDuzeltmeleri);
+
                 if (eslesenSegment != null && segmentDuzeltmeleri.TryGetValue(eslesenSegment.No, out var liste))
                 {
                     liste.Add(d);
+                    string yeniMetin = d.Yeni;
+                    if (string.Equals(d.Tur, "geri_al", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hedef = liste.FirstOrDefault(x => x.Id == d.GeriAlHedef)
+                                 ?? siraliTumDuzeltmeler.FirstOrDefault(x => x.Id == d.GeriAlHedef);
+                        if (hedef != null)
+                        {
+                            yeniMetin = hedef.Eski;
+                        }
+                    }
+                    guncelMetinler[eslesenSegment.No] = yeniMetin;
+                    gecmisMetinler[eslesenSegment.No].Add(yeniMetin);
                 }
                 else
                 {
@@ -371,9 +418,9 @@ public class DuzeltmeDeposu
             // Aynı onceki_id'yi paylaşan ≥2 düzeltme → Cakisma=true (ikisi de geçmişte kalır)
             var cakisanOncekiIdler = sirali
                 .Where(d => !string.IsNullOrEmpty(d.OncekiId))
-                .GroupBy(d => d.OncekiId)
+                .GroupBy(d => d.OncekiId!)
                 .Where(g => g.Count() >= 2)
-                .Select(g => g.Key!)
+                .Select(g => g.Key)
                 .ToHashSet(StringComparer.Ordinal);
 
             bool cakisma = cakisanOncekiIdler.Count > 0;
@@ -460,38 +507,90 @@ public class DuzeltmeDeposu
         return new BirlestirmeSonucu(efektifSegmentler, yetimler, AtlananDosyaSayisi);
     }
 
+    private static Segment? SegmentEslestir(
+        IReadOnlyList<Segment> segmentler,
+        Duzeltme d,
+        IReadOnlyDictionary<int, string> guncelMetinler,
+        IReadOnlyDictionary<int, List<string>> gecmisMetinler,
+        IReadOnlyDictionary<int, List<Duzeltme>> segmentDuzeltmeleri)
+    {
+        // Bulgu 2: Bas yoksa zaman şartı atlanamaz, düzeltme Yetim sayılır
+        if (!d.Bas.HasValue)
+        {
+            return null;
+        }
+
+        // Bulgu 1: Eşleşeni zamanla bulup zinciri güncel metin üzerinden çöz
+        var zamanEslesenleri = segmentler
+            .Where(s => Math.Abs(s.Bas - d.Bas.Value) <= 0.5001)
+            .OrderBy(s => Math.Abs(s.Bas - d.Bas.Value))
+            .ToList();
+
+        if (zamanEslesenleri.Count == 0)
+        {
+            return null;
+        }
+
+        // 1. Doğrudan güncel metin ile eşleşen segmente bak
+        foreach (var s in zamanEslesenleri)
+        {
+            if (guncelMetinler.TryGetValue(s.No, out var gm) && MetinlerEslesiyor(gm, d.Eski))
+            {
+                return s;
+            }
+        }
+
+        // 2. Ham transkript metni ile eşleşen segmente bak
+        foreach (var s in zamanEslesenleri)
+        {
+            if (MetinlerEslesiyor(s.Metin, d.Eski))
+            {
+                return s;
+            }
+        }
+
+        // 3. Zincir (OncekiId) veya geçmiş metinler üzerinden eşleşeni bul
+        foreach (var s in zamanEslesenleri)
+        {
+            bool oncekiIdEslesiyor = !string.IsNullOrEmpty(d.OncekiId) &&
+                segmentDuzeltmeleri.TryGetValue(s.No, out var bagli) &&
+                bagli.Any(x => x.Id == d.OncekiId);
+
+            bool gecmisMetinEslesiyor = gecmisMetinler.TryGetValue(s.No, out var gecmis) &&
+                gecmis.Any(m => MetinlerEslesiyor(m, d.Eski));
+
+            if (oncekiIdEslesiyor || gecmisMetinEslesiyor)
+            {
+                return s;
+            }
+        }
+
+        return null;
+    }
+
     private static Segment? SegmentEslestir(IReadOnlyList<Segment> segmentler, Duzeltme d)
     {
+        // Bulgu 2: Bas yoksa zaman şartı atlanamaz, düzeltme Yetim sayılır
+        if (!d.Bas.HasValue)
+        {
+            return null;
+        }
+
         Segment? enIyi = null;
         double enKucukFark = double.MaxValue;
 
         foreach (var s in segmentler)
         {
-            bool metinUyuyor = MetinlerEslesiyor(s.Metin, d.Eski);
-            if (!metinUyuyor)
+            if (!MetinlerEslesiyor(s.Metin, d.Eski))
             {
                 continue;
             }
 
-            if (d.Bas.HasValue)
+            double fark = Math.Abs(s.Bas - d.Bas.Value);
+            if (fark <= 0.5001 && fark < enKucukFark)
             {
-                double fark = Math.Abs(s.Bas - d.Bas.Value);
-                if (fark <= 0.5001 && fark < enKucukFark)
-                {
-                    enKucukFark = fark;
-                    enIyi = s;
-                }
-            }
-            else
-            {
-                if (s.No == d.SegmentNo)
-                {
-                    return s;
-                }
-                if (enIyi == null)
-                {
-                    enIyi = s;
-                }
+                enKucukFark = fark;
+                enIyi = s;
             }
         }
 
