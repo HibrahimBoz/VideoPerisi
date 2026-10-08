@@ -85,12 +85,19 @@ public partial class AramaPenceresi : Window
             DurumBilgisi.Text = "İndeksleniyor...";
             var ilerleme = new Progress<int>(yuzde =>
             {
-                IlerlemeCubugu.Value = yuzde;
-                DurumBilgisi.Text = $"İndeksleniyor... %{yuzde}";
+                Dispatcher.Invoke(() =>
+                {
+                    IlerlemeCubugu.Value = yuzde;
+                    DurumBilgisi.Text = $"İndeksleniyor... %{yuzde}";
+                });
             });
 
-            await _aramaMotoru.IndeksleAsync(_dersler, ilerleme);
-            DurumBilgisi.Text = "Hazır";
+            var dersSnapshot = _dersler.ToList();
+            await Task.Run(async () => await _aramaMotoru.IndeksleAsync(dersSnapshot, ilerleme));
+
+            DurumBilgisi.Text = _aramaMotoru.AtlananDersSayisi > 0
+                ? $"{_aramaMotoru.AtlananDersSayisi} ders atlandı"
+                : "Hazır";
         }
         catch (Exception ex)
         {

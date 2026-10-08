@@ -69,6 +69,11 @@ internal sealed class IndeksliSegment
 }
 
 /// <summary>
+/// İndeksleme sırasında atlanan (bozuk veya kilitli) ders.
+/// </summary>
+public sealed record AtlananDers(string DersAd, string JsonYolu, string Neden);
+
+/// <summary>
 /// Türkçe transkriptler üzerinde hızlı bellek içi metin arama motoru.
 /// </summary>
 public class MetinAramaMotoru : IAramaMotoru, IDisposable
@@ -85,6 +90,14 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
     /// Son indeksleme sırasında diskten fiilen okunan ders sayısı.
     /// </summary>
     public int DiskOkumaSayisi { get; private set; }
+
+    /// <summary>
+    /// Son indekslemede atlanan dersler (bozuk şema, kilitli dosya, okunamayan transkript).
+    /// </summary>
+    public IReadOnlyList<AtlananDers> AtlananDersler { get; private set; } = Array.Empty<AtlananDers>();
+
+    /// <summary>Son indekslemede atlanan ders sayısı.</summary>
+    public int AtlananDersSayisi => AtlananDersler.Count;
 
     public MetinAramaMotoru(
         IndeksOnbellek? onbellek = null,
@@ -105,6 +118,8 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
 
         var dersListesi = (dersler ?? Array.Empty<DersKaydi>()).ToList();
         DiskOkumaSayisi = 0;
+        var atlanan = new List<AtlananDers>();
+        AtlananDersler = atlanan;
 
         if (dersListesi.Count == 0)
         {
@@ -138,12 +153,13 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
         {
             iptal.ThrowIfCancellationRequested();
             var ders = dersListesi[i];
+            string anahtar = ders.IndeksAnahtari;
             var guncelAnahtar = DersOnbellekAnahtari.Uret(ders);
 
             bool onbellektenAlindi = false;
 
             if (onbellekVeri != null &&
-                onbellekVeri.Dersler.TryGetValue(ders.Ad, out var onbellekDers) &&
+                onbellekVeri.Dersler.TryGetValue(anahtar, out var onbellekDers) &&
                 AnahtarEsitMi(onbellekDers.Anahtar, guncelAnahtar))
             {
                 var yuklenenSegmentler = new List<IndeksliSegment>(onbellekDers.Segmentler.Count);
@@ -158,25 +174,32 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
                         seg.Metin));
                 }
 
-                geciciDersler[ders.Ad] = yuklenenSegmentler;
-                yeniOnbellek.Dersler[ders.Ad] = onbellekDers;
+                geciciDersler[anahtar] = yuklenenSegmentler;
+                yeniOnbellek.Dersler[anahtar] = onbellekDers;
                 onbellektenAlindi = true;
             }
 
             if (!onbellektenAlindi)
             {
-                DiskOkumaSayisi++;
-                var tazeSegmentler = DersiDisktenYukle(ders);
-                geciciDersler[ders.Ad] = tazeSegmentler;
-
-                var yeniOnbellekDers = new OnbellekDers
+                try
                 {
-                    DersAd = ders.Ad,
-                    JsonYolu = ders.JsonYolu,
-                    Anahtar = guncelAnahtar,
-                    Segmentler = tazeSegmentler.Select(s => new OnbellekSegment(s.SegmentNo, s.BasSn, s.SonSn, s.Metin)).ToList()
-                };
-                yeniOnbellek.Dersler[ders.Ad] = yeniOnbellekDers;
+                    var tazeSegmentler = DersiDisktenYukle(ders);
+                    DiskOkumaSayisi++;
+                    geciciDersler[anahtar] = tazeSegmentler;
+
+                    var yeniOnbellekDers = new OnbellekDers
+                    {
+                        DersAd = ders.Ad,
+                        JsonYolu = string.IsNullOrEmpty(anahtar) ? ders.JsonYolu : anahtar,
+                        Anahtar = guncelAnahtar,
+                        Segmentler = tazeSegmentler.Select(s => new OnbellekSegment(s.SegmentNo, s.BasSn, s.SonSn, s.Metin)).ToList()
+                    };
+                    yeniOnbellek.Dersler[anahtar] = yeniOnbellekDers;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    atlanan.Add(new AtlananDers(ders.Ad ?? string.Empty, ders.JsonYolu ?? string.Empty, ex.Message));
+                }
             }
 
             if (ilerleme != null)
@@ -186,7 +209,7 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
             }
         }
 
-        if (_onbellek != null)
+        if (_onbellek != null && (yeniOnbellek.Dersler.Count > 0 || atlanan.Count == 0))
         {
             try
             {
@@ -352,11 +375,12 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
         }
 
         var tazeSegmentler = DersiDisktenYukle(ders);
+        string anahtar = ders.IndeksAnahtari;
 
         _kilit.EnterWriteLock();
         try
         {
-            _dersSegmentleri[ders.Ad] = tazeSegmentler;
+            _dersSegmentleri[anahtar] = tazeSegmentler;
             _tumSegmentler = _dersSegmentleri.Values.SelectMany(x => x).ToArray();
         }
         finally
@@ -372,10 +396,10 @@ public class MetinAramaMotoru : IAramaMotoru, IDisposable
                 var mevcutVeri = _onbellek.Yukle(kok) ?? new OnbellekVerisi();
                 var guncelAnahtar = DersOnbellekAnahtari.Uret(ders);
 
-                mevcutVeri.Dersler[ders.Ad] = new OnbellekDers
+                mevcutVeri.Dersler[anahtar] = new OnbellekDers
                 {
                     DersAd = ders.Ad,
-                    JsonYolu = ders.JsonYolu,
+                    JsonYolu = string.IsNullOrEmpty(anahtar) ? ders.JsonYolu : anahtar,
                     Anahtar = guncelAnahtar,
                     Segmentler = tazeSegmentler.Select(s => new OnbellekSegment(s.SegmentNo, s.BasSn, s.SonSn, s.Metin)).ToList()
                 };

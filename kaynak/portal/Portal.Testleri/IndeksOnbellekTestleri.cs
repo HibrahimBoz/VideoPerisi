@@ -217,7 +217,7 @@ public class IndeksOnbellekTestleri : IDisposable
         // Geçerli JSON ama Dersler alanı null (bozuk önbellek)
         string bozukJson = """
         {
-          "Surum": 1,
+          "Surum": 2,
           "KayitZamaniUtc": "2026-01-01T00:00:00Z",
           "Dersler": null
         }
@@ -241,7 +241,7 @@ public class IndeksOnbellekTestleri : IDisposable
         var tazeVeri = onbellek.Yukle();
         Assert.NotNull(tazeVeri);
         Assert.NotNull(tazeVeri.Dersler);
-        Assert.True(tazeVeri.Dersler.ContainsKey("ders1"));
+        Assert.True(tazeVeri.Dersler.ContainsKey(ders1.IndeksAnahtari));
     }
 
     [Fact]
@@ -308,7 +308,7 @@ public class IndeksOnbellekTestleri : IDisposable
         var onbellek = new IndeksOnbellek(_onbellekDosyasi);
         var veri = new OnbellekVerisi
         {
-            Surum = 1,
+            Surum = IndeksOnbellek.GuncelSurum,
             KayitZamaniUtc = DateTime.UtcNow
         };
 
@@ -320,7 +320,7 @@ public class IndeksOnbellekTestleri : IDisposable
 
         var yuklenen = onbellek.Yukle();
         Assert.NotNull(yuklenen);
-        Assert.Equal(1, yuklenen.Surum);
+        Assert.Equal(IndeksOnbellek.GuncelSurum, yuklenen.Surum);
     }
 
     [Fact]

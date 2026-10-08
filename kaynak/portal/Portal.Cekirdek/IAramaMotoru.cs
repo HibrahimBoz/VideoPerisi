@@ -6,6 +6,11 @@ namespace Portal.Cekirdek;
 public interface IAramaMotoru
 {
     /// <summary>
+    /// Son indekslemede atlanan ders sayısı.
+    /// </summary>
+    int AtlananDersSayisi { get; }
+
+    /// <summary>
     /// Verilen ders kayıtlarını indeksler.
     /// </summary>
     Task IndeksleAsync(IEnumerable<DersKaydi> dersler, IProgress<int>? ilerleme = null, CancellationToken iptal = default);
