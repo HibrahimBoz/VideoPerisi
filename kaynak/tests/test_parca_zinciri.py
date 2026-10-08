@@ -472,6 +472,26 @@ class TestParcaZinciri(unittest.TestCase):
         sirali = sorted(isimler, key=dogal_siralama_anahtari)
         self.assertEqual(sirali, ["ders_1.mp4", "ders_2.mp4", "ders_10.mp4", "ders_20.mp4"])
 
+    def test_26_ayni_baslangic_zamani_dogal_zincirleme(self):
+        """Tüm başlangıç zamanları eşit olduğunda parçalar silinmez, doğal ad sırasıyla zincirlenir."""
+        parcalar = [
+            Parca("b.mp4", 1000.0, 600.0),
+            Parca("a.mp4", 1000.0, 600.0),
+        ]
+        cizelge = SanalZamanCizelgesi(parcalar)
+
+        # İki parça da korunmalı
+        self.assertEqual(len(cizelge), 2)
+        self.assertAlmostEqual(cizelge.toplam_sure, 1200.0)
+        self.assertEqual(cizelge[0].dosya, "a.mp4")
+        self.assertEqual(cizelge[1].dosya, "b.mp4")
+        self.assertAlmostEqual(cizelge[0].sanal_bas, 0.0)
+        self.assertAlmostEqual(cizelge[0].sanal_son, 600.0)
+        self.assertAlmostEqual(cizelge[1].sanal_bas, 600.0)
+        self.assertAlmostEqual(cizelge[1].sanal_son, 1200.0)
+        # Uyarı eklenmiş olmalı
+        self.assertTrue(any("eşit" in u for u in cizelge.uyarilar))
+
 
 if __name__ == "__main__":
     unittest.main()

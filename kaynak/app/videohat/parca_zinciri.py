@@ -102,10 +102,44 @@ class SanalZamanCizelgesi:
             self._indeksleri_hazirla()
             return
 
-        # 2. Sıralama: başlangıç zamanı, yoksa doğal dosya adı
+        # 2. Kontrol: Tüm parçaların başlangıç zamanları eşit mi?
+        tum_zamanlar_esit = (
+            len(gecerli_parcalar) > 1
+            and all(
+                p.baslangic_zamani is not None
+                and p.baslangic_zamani == gecerli_parcalar[0].baslangic_zamani
+                for p in gecerli_parcalar
+            )
+        )
+        if tum_zamanlar_esit:
+            self.uyarilar.append(
+                "Tüm parçaların başlangıç zamanları eşit olduğu için doğal ad sırasına göre zincirlendi."
+            )
+            sirali = sorted(
+                gecerli_parcalar,
+                key=lambda p: (
+                    dogal_siralama_anahtari(os.path.basename(p.dosya)),
+                    dogal_siralama_anahtari(p.dosya),
+                ),
+            )
+            sanal_imlec = 0.0
+            for p in sirali:
+                dilim = Dilim(
+                    dosya=p.dosya,
+                    sanal_bas=sanal_imlec,
+                    sanal_son=sanal_imlec + p.sure_sn,
+                    yerel_bas=0.0,
+                    tur="kayit",
+                )
+                self.dilimler.append(dilim)
+                sanal_imlec += p.sure_sn
+            self._indeksleri_hazirla()
+            return
+
+        # 3. Sıralama: başlangıç zamanı, yoksa doğal dosya adı
         sirali = sorted(gecerli_parcalar, key=parca_siralama_anahtari)
 
-        # 3. Dilimleri oluştur
+        # 4. Dilimleri oluştur
         sanal_imlec = 0.0
         son_gercek_son: Optional[float] = None
 
