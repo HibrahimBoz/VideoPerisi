@@ -3,6 +3,12 @@ gpu_model = "large-v3"
 cpu_model = "medium"
 beam_size = 5
 vad = true
+vad_max_konusma_sn = 20.0
+vad_bosluk_ms = 500
+vad_konusma_pad_ms = 400
+halusinasyon_esik_sn = 2.0
+guven_esik = 0.45
+guven_kisa_esik = 0.30
 terimler_dosyasi = "terimler.txt"
 [ses]
 highpass_hz = 80
