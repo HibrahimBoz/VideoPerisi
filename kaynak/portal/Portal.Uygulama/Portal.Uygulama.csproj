@@ -19,4 +19,9 @@
     <ProjectReference Include="..\Portal.Cekirdek\Portal.Cekirdek.csproj" />
   </ItemGroup>
 
+  <!-- Yayında yalnız win-x64 libvlc kalır (ölçüldü: x86 105 MB + arm64 91 MB gereksiz). -->
+  <Target Name="LibVlcFazlaMimariTemizle" AfterTargets="Publish">
+    <RemoveDir Directories="$(PublishDir)libvlc\win-x86;$(PublishDir)libvlc\win-arm64" />
+  </Target>
+
 </Project>
