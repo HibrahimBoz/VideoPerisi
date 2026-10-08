@@ -36,6 +36,57 @@ def _topla(girdi: Path) -> list[Path]:
     return [girdi]
 
 
+def _cikis_belirle(
+    video: Path,
+    girdi_koku: Path,
+    cikis_arg: str | Path | None,
+    tek_dosya_mi: bool = False,
+    kullanilan: set[Path] | None = None,
+) -> Path:
+    """
+    Çıktı klasörünü belirler.
+    Tek dosya girdisinde --cikis aynen korunur.
+    Klasör girdisinde <cikis>/<bagil>/<stem>_videoperisi düzeni ve çakışma koruması uygulanır.
+    """
+    if tek_dosya_mi:
+        return Path(cikis_arg) if cikis_arg else video.parent / f"{video.stem}_videoperisi"
+
+    if cikis_arg:
+        try:
+            bagil = video.relative_to(girdi_koku).parent
+        except ValueError:
+            bagil = Path()
+        hedef = Path(cikis_arg) / bagil / f"{video.stem}_videoperisi"
+    else:
+        hedef = video.parent / f"{video.stem}_videoperisi"
+
+    def _cakisiyor(p: Path) -> bool:
+        if kullanilan is not None and p in kullanilan:
+            return True
+        try:
+            if p.exists():
+                return True
+        except OSError:
+            pass
+        return False
+
+    if _cakisiyor(hedef):
+        aday = hedef.parent / f"{video.stem}_{video.suffix.lstrip('.')}_videoperisi"
+        sayac = 1
+        while _cakisiyor(aday):
+            aday = (
+                hedef.parent
+                / f"{video.stem}_{video.suffix.lstrip('.')}_{sayac}_videoperisi"
+            )
+            sayac += 1
+        hedef = aday
+
+    if kullanilan is not None:
+        kullanilan.add(hedef)
+
+    return hedef
+
+
 def _isle(args) -> int:
     from . import ayar as ayar_mod
     from .hat import Bayraklar, isle_tek
@@ -45,6 +96,9 @@ def _isle(args) -> int:
     bay = Bayraklar(agir_ses=args.agir_ses, goruntu=args.goruntu, upscale=args.upscale,
                     model=args.model, cihaz=args.cihaz)
     hatali = 0
+    tek_dosya_girdisi = len(args.girdi) == 1 and Path(args.girdi[0]).is_file()
+    kullanilan_ciktilar: set[Path] = set()
+
     for yol in args.girdi:
         p = Path(yol)
         if not p.exists():
@@ -52,7 +106,13 @@ def _isle(args) -> int:
             hatali += 1
             continue
         for video in _topla(p):
-            cikis = Path(args.cikis) if args.cikis else video.parent / f"{video.stem}_videoperisi"
+            cikis = _cikis_belirle(
+                video,
+                girdi_koku=p,
+                cikis_arg=args.cikis,
+                tek_dosya_mi=tek_dosya_girdisi,
+                kullanilan=kullanilan_ciktilar,
+            )
             cikis.mkdir(parents=True, exist_ok=True)
             log.info("İşleniyor: %s", video)
             s = isle_tek(video, cikis, ayar, bay)
@@ -71,12 +131,19 @@ def _isle_grup(args) -> int:
     kok = yollar.kok()
     ayar = ayar_mod.yukle(kok)
     log = logging.getLogger("videohat")
-    bay = Bayraklar(agir_ses=args.agir_ses, goruntu=args.goruntu)
+    bay = Bayraklar(agir_ses=args.agir_ses, goruntu=args.goruntu,
+                    model=args.model, cihaz=args.cihaz)
     klasor = Path(args.klasor)
     if not klasor.exists() or not klasor.is_dir():
         log.error("Klasör bulunamadı: %s", klasor)
         return 1
-    sonuc = grup.isle_grup(klasor, ayar, bay, referans_kanal_adi=args.referans)
+    sonuc = grup.isle_grup(
+        klasor,
+        ayar,
+        bay,
+        referans_kanal_adi=args.referans,
+        ses_enerji_fn=grup.varsayilan_ses_enerjisi,
+    )
     for u in sonuc.uyarilar:
         log.warning("Grup uyarısı: %s", u)
     if not sonuc.basarili:
@@ -86,7 +153,7 @@ def _isle_grup(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def parser_olustur() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="videohat")
     alt = ap.add_subparsers(dest="komut", required=True)
     i = alt.add_parser("isle", help="dosya veya klasör işle")
@@ -102,8 +169,15 @@ def main(argv=None) -> int:
     ig.add_argument("--referans", help="referans kamera/kanal adı")
     ig.add_argument("--goruntu", action="store_true", help="görüntü iyileştirme")
     ig.add_argument("--agir-ses", action="store_true", help="DeepFilterNet ağır mod")
+    ig.add_argument("--model", choices=["large-v3", "medium", "turbo"])
+    ig.add_argument("--cihaz", choices=["cpu", "cuda"])
     alt.add_parser("izle", help="is\\gelen klasörünü izle")
     alt.add_parser("kontrol", help="kendi kendine test")
+    return ap
+
+
+def main(argv=None) -> int:
+    ap = parser_olustur()
     args = ap.parse_args(argv)
     try:
         kok = yollar.kok()

@@ -15,7 +15,7 @@ import wave
 
 import numpy as np
 
-from . import cikti, ders_json, parca_zinciri, senkron, yollar
+from . import cikti, ders_json, parca_zinciri, senkron, ses, yollar
 from .cihaz import CihazSecimi
 from .hat import Bayraklar
 from .parca_zinciri import dogal_siralama_anahtari
@@ -23,7 +23,8 @@ from .stt import Segment
 
 gunluk = logging.getLogger("videohat")
 VIDEO_UZANTILARI = {".mp4", ".mkv", ".mov", ".avi", ".m4a", ".wav", ".mp3"}
-KALIP_REGEX = re.compile(r"^(.*?)[_-]?(\d+)\.(mp4|mkv|mov|avi)$", re.IGNORECASE)
+_UZANTI_DESENI = "|".join(sorted(re.escape(u.lstrip(".")) for u in VIDEO_UZANTILARI))
+KALIP_REGEX = re.compile(rf"^(.*?)[_-]?(\d+)\.({_UZANTI_DESENI})$", re.IGNORECASE)
 
 
 @dataclass
@@ -80,6 +81,9 @@ def kanallari_bul(klasor: str | Path) -> Dict[str, List[Path]]:
             kanal_adi = m.group(1).strip()
             if not kanal_adi:
                 kanal_adi = "kanal"
+            sonuc.setdefault(kanal_adi, []).append(f)
+        else:
+            kanal_adi = f.stem
             sonuc.setdefault(kanal_adi, []).append(f)
 
     if sonuc:
@@ -154,6 +158,19 @@ def hazirla_kanal(
     return parca_zinciri.cizelge_olustur(parca_listesi)
 
 
+def varsayilan_ses_enerjisi(kanal_veya_ses: Any, veri: Any = None) -> float:
+    """
+    Ses sinyalinin RMS (Root Mean Square) enerjisini hesaplar.
+    Sessiz kanalların referans seçilmesini engeller.
+    """
+    dizi = veri if veri is not None else kanal_veya_ses
+    if isinstance(dizi, np.ndarray):
+        if dizi.size == 0:
+            return 0.0
+        return float(np.sqrt(np.mean(np.square(dizi.astype(np.float64, copy=False)))))
+    return 0.0
+
+
 def referans_sec(
     kanallar: Any,
     ses_enerji_fn: Optional[Callable] = None,
@@ -174,24 +191,32 @@ def referans_sec(
         return secilen
 
     if ses_enerji_fn is None:
-        return kanal_adlari[0]
+        ses_enerji_fn = varsayilan_ses_enerjisi
 
     skorlar: Dict[str, float] = {}
     for k in kanal_adlari:
         veri = kanallar[k] if isinstance(kanallar, dict) else None
-        try:
-            skorlar[k] = float(ses_enerji_fn(k))
-        except TypeError:
-            skorlar[k] = float(ses_enerji_fn(k, veri))
+        if veri is not None:
+            try:
+                skorlar[k] = float(ses_enerji_fn(veri))
+            except TypeError:
+                try:
+                    skorlar[k] = float(ses_enerji_fn(k, veri))
+                except TypeError:
+                    skorlar[k] = float(ses_enerji_fn(k))
+        else:
+            try:
+                skorlar[k] = float(ses_enerji_fn(k))
+            except TypeError:
+                skorlar[k] = float(ses_enerji_fn(k, veri))
 
     return max(kanal_adlari, key=lambda k: skorlar.get(k, 0.0))
 
 
-def _ffmpeg_ses_yukle(dosya: Path | str, sr: int = 8000) -> np.ndarray:
-    """ffmpeg ile dosyadan 8 kHz mono float32 raw ses yükler."""
-    dosya = Path(dosya)
+def ses_yukle_komutu(dosya: Path | str, sr: int = 16000) -> list[str]:
+    """ffmpeg ile raw ses okuma komutunu üretir."""
     ffmpeg_exe = str(yollar.ffmpeg())
-    cmd = [
+    return [
         ffmpeg_exe,
         "-v", "error",
         "-i", str(dosya),
@@ -200,6 +225,12 @@ def _ffmpeg_ses_yukle(dosya: Path | str, sr: int = 8000) -> np.ndarray:
         "-ar", str(sr),
         "pipe:1",
     ]
+
+
+def _ffmpeg_ses_yukle(dosya: Path | str, sr: int = 8000) -> np.ndarray:
+    """ffmpeg ile dosyadan mono float32 raw ses yükler."""
+    dosya = Path(dosya)
+    cmd = ses_yukle_komutu(dosya, sr=sr)
     try:
         res = subprocess.run(
             cmd,
@@ -282,7 +313,22 @@ def senkronla(
     return sonuclar
 
 
-def _varsayilan_transkript(ref_ses: np.ndarray, cikis_dir: Path, ayar: Any, bayraklar: Any) -> List[Segment]:
+class TranskriptSonucu(list):
+    """Segment listesi ve transkripsiyon üstverisi."""
+
+    def __init__(self, segmentler=(), meta: Optional[Dict[str, Any]] = None):
+        super().__init__(segmentler)
+        self.meta: Dict[str, Any] = meta or {}
+
+
+def _varsayilan_transkript(
+    ref_ses: np.ndarray,
+    cikis_dir: Path,
+    ayar: Any,
+    bayraklar: Any,
+    sr: int = 16000,
+    meta_cikti: Optional[Dict[str, Any]] = None,
+) -> List[Segment]:
     """Gerçek çalışma için referans sesi geçici klasörde işler ve ara çıktıları temizler."""
     from . import hat
     if ayar is None:
@@ -299,7 +345,7 @@ def _varsayilan_transkript(ref_ses: np.ndarray, cikis_dir: Path, ayar: Any, bayr
         with wave.open(str(tmp_wav), "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
-            wf.setframerate(8000)
+            wf.setframerate(sr)
             wf.writeframes(ses_int16.tobytes())
 
         # hat.isle_tek geçici klasörde çalıştırılır; son çıktı klasörü kirletilmez
@@ -311,11 +357,14 @@ def _varsayilan_transkript(ref_ses: np.ndarray, cikis_dir: Path, ayar: Any, bayr
         json_yolu = tmp_dir / f"{tmp_wav.stem}.json"
         if json_yolu.exists():
             veri = json.loads(json_yolu.read_text(encoding="utf-8"))
-            return [
+            if meta_cikti is not None:
+                meta_cikti.update(veri)
+            segmentler = [
                 Segment(s_item["bas"], s_item["son"], s_item["metin"])
                 for s_item in veri.get("segmentler", [])
             ]
-        return []
+            return TranskriptSonucu(segmentler, meta=veri)
+        return TranskriptSonucu([])
 
 
 def isle_grup(
@@ -382,9 +431,15 @@ def isle_grup(
             hata="Geçerli kanal kalmadı",
         )
 
-    # Referans kanal seçimi
+    # Seslerin birleştirilmesi (8 kHz senkron ve enerji ölçümü için)
+    sr_senkron = 8000
+    kanal_sesleri: Dict[str, np.ndarray] = {}
+    for k_ad, (_, cizelge) in gecerli_kanallar.items():
+        kanal_sesleri[k_ad] = ses_birlestir(cizelge, ses_yukle_fn, sr=sr_senkron)
+
+    # Referans kanal seçimi (en yüksek RMS enerjili kanal)
     ref_ad = referans_sec(
-        list(gecerli_kanallar.keys()),
+        kanal_sesleri,
         ses_enerji_fn=ses_enerji_fn,
         manuel_override=referans_kanal_adi,
     )
@@ -392,13 +447,12 @@ def isle_grup(
         uyarilar.append(f"Belirtilen referans kanal '{ref_ad}' bulunamadı; varsayılan seçildi.")
         ref_ad = list(gecerli_kanallar.keys())[0]
 
-    # Seslerin birleştirilmesi
-    sr = 8000
-    kanal_sesleri: Dict[str, np.ndarray] = {}
-    for k_ad, (_, cizelge) in gecerli_kanallar.items():
-        kanal_sesleri[k_ad] = ses_birlestir(cizelge, ses_yukle_fn, sr=sr)
+    ref_ses_senkron = kanal_sesleri[ref_ad]
 
-    ref_ses = kanal_sesleri[ref_ad]
+    # Transkript için referans kanalın sesi tam bantta (16 kHz) çıkarılır
+    sr_transkript = 16000
+    ref_cizelge = gecerli_kanallar[ref_ad][1]
+    ref_ses_transkript = ses_birlestir(ref_cizelge, ses_yukle_fn, sr=sr_transkript)
 
     # Senkronizasyon (Tek kanalda atlanır)
     senkron_sonuclari: Dict[str, senkron.SenkronSonucu] = {}
@@ -419,7 +473,7 @@ def isle_grup(
             neden="tek kanal (senkron atlandi)",
         )
     else:
-        senkron_sonuclari = senkronla(ref_ses, kanal_sesleri, sr=sr)
+        senkron_sonuclari = senkronla(ref_ses_senkron, kanal_sesleri, sr=sr_senkron)
         tum_guvenilir = all(s.guvenilir for s in senkron_sonuclari.values())
         min_guven = min((s.guven for s in senkron_sonuclari.values()), default=1.0)
         ortalama_drift = float(np.mean([s.drift_ppm for s in senkron_sonuclari.values()]))
@@ -485,14 +539,26 @@ def isle_grup(
     cikis_dir.mkdir(parents=True, exist_ok=True)
     cikti_dosyalari: List[Path] = []
 
+    transkript_meta: Dict[str, Any] = {}
     try:
         if transkript_fn is not None:
             try:
-                bolumler = transkript_fn(ref_ses)
+                bolumler = transkript_fn(ref_ses_transkript)
             except TypeError:
-                bolumler = transkript_fn(ref_ses, cikis_dir)
+                bolumler = transkript_fn(ref_ses_transkript, cikis_dir)
+            if hasattr(bolumler, "meta") and isinstance(bolumler.meta, dict):
+                transkript_meta = bolumler.meta
         else:
-            bolumler = _varsayilan_transkript(ref_ses, cikis_dir, ayar, bayraklar)
+            bolumler = _varsayilan_transkript(
+                ref_ses_transkript,
+                cikis_dir,
+                ayar,
+                bayraklar,
+                sr=sr_transkript,
+                meta_cikti=transkript_meta,
+            )
+            if hasattr(bolumler, "meta") and isinstance(bolumler.meta, dict):
+                transkript_meta.update(bolumler.meta)
     except Exception as e:
         hata_mesaji = str(e)
         gunluk.error("Transkripsiyon hatası: %s", hata_mesaji)
@@ -520,13 +586,25 @@ def isle_grup(
     cikti.vtt(bolumler, vtt_yolu)
     cikti.txt(bolumler, txt_yolu)
 
-    secim = CihazSecimi(
-        device="cpu",
-        compute_type="float32",
-        model_ad="turbo",
-        neden="grup_transkript",
+    cihaz_adi = transkript_meta.get(
+        "cihaz",
+        bayraklar.cihaz if (bayraklar and bayraklar.cihaz) else "cpu",
     )
-    cikti.json_meta(bolumler, secim, {"grup_isleme": 0.0}, json_yolu)
+    compute_type = transkript_meta.get("compute_type", "float32")
+    model_adi = transkript_meta.get(
+        "model",
+        bayraklar.model if (bayraklar and bayraklar.model) else "turbo",
+    )
+    neden = transkript_meta.get("neden", "grup_transkript")
+    sureler = transkript_meta.get("sureler", {"grup_isleme": 0.0})
+
+    secim = CihazSecimi(
+        device=cihaz_adi,
+        compute_type=compute_type,
+        model_ad=model_adi,
+        neden=neden,
+    )
+    cikti.json_meta(bolumler, secim, sureler, json_yolu)
     ders_json.yaz(ders_json_yolu, ders_tanimi)
 
     cikti_dosyalari.extend([srt_yolu, vtt_yolu, txt_yolu, json_yolu, ders_json_yolu])

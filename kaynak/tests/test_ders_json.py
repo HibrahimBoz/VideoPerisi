@@ -823,6 +823,80 @@ class TestDersJsonVeGrup(unittest.TestCase):
         uyari_metin = " ".join(sonuc.uyarilar)
         self.assertIn("Harici STT servisi ulaşılamaz", uyari_metin)
 
+    # 32. Sayısız Dosyalar ve Ses Uzantılarıyla Kanal Bulma (Kusur 1)
+    def test_32_kanallari_bul_sayisiz_ve_ses_uzantilari(self):
+        """Düz klasörde ders.mp4 tek kanal olur; cam1.mp3 ve cam2.m4a ses uzantılarıyla bulunur."""
+        (self.klasor / "ders.mp4").touch()
+        kanallar = grup.kanallari_bul(self.klasor)
+        self.assertIn("ders", kanallar)
+        self.assertEqual(len(kanallar["ders"]), 1)
+
+        klasor2 = Path(tempfile.mkdtemp())
+        try:
+            (klasor2 / "cam1.mp3").touch()
+            (klasor2 / "cam2.m4a").touch()
+            kanallar2 = grup.kanallari_bul(klasor2)
+            self.assertIn("cam", kanallar2)
+            self.assertEqual(len(kanallar2["cam"]), 2)
+        finally:
+            shutil.rmtree(klasor2, ignore_errors=True)
+
+    # 33. Referans Kanal Seçiminde RMS ile Sessiz Mikrofonun Elenmesi (Kusur 2)
+    def test_33_referans_sec_rms_sessiz_kanal_elenir(self):
+        """Alfabetik sırada önce gelse bile sessiz kanal yerine enerjili kanal seçilir."""
+        sessiz = np.zeros(8000, dtype=np.float32)
+        sesli = _sentetik_konusma(1.0, sr=8000, tohum=42)
+
+        # a_sessiz alfabetik olarak b_sesli'den önde
+        kanallar = {"a_sessiz": sessiz, "b_sesli": sesli}
+        secilen = grup.referans_sec(kanallar)
+        self.assertEqual(secilen, "b_sesli")
+
+    # 34. hat.isle_tek Üstveri Alanlarının Grup JSON Çıktısına Aktarımı (Kusur 6)
+    def test_34_isle_grup_meta_alanlari_aktarimi(self):
+        """hat.isle_tek'in ürettiği cihaz, model, compute_type ve süreler alanları son JSON'a aktarılır."""
+        from unittest.mock import patch
+        from videohat.hat import Bayraklar, Sonuc
+
+        (self.klasor / "tek_cam").mkdir()
+        (self.klasor / "tek_cam" / "01.mp4").touch()
+
+        def sahte_prob(d):
+            return 0.0, 5.0
+
+        def sahte_ses(d, sr=8000):
+            return np.zeros(5 * sr, dtype=np.float32)
+
+        def sahte_isle_tek(video, hedef_cikis, ayar, bayraklar):
+            hedef_path = Path(hedef_cikis)
+            meta = {
+                "sema_surumu": 2,
+                "cihaz": "cuda",
+                "compute_type": "float16",
+                "model": "large-v3",
+                "neden": "gpu_bellek_yeterli",
+                "sureler": {"stt": 4.2, "ses_cikar": 0.8},
+                "segmentler": [{"bas": 0.0, "son": 2.0, "metin": "Test"}],
+            }
+            (hedef_path / f"{video.stem}.json").write_text(json.dumps(meta), encoding="utf-8")
+            return Sonuc(ad=video.stem, basarili=True, hata=None)
+
+        bay = Bayraklar(model="large-v3", cihaz="cuda")
+        with patch("videohat.hat.isle_tek", side_effect=sahte_isle_tek):
+            sonuc = grup.isle_grup(
+                self.klasor,
+                bayraklar=bay,
+                prob_fn=sahte_prob,
+                ses_yukle_fn=sahte_ses,
+            )
+
+        self.assertTrue(sonuc.basarili)
+        json_icerik = json.loads((sonuc.cikis_klasoru / f"{self.klasor.name}.json").read_text(encoding="utf-8"))
+        self.assertEqual(json_icerik["cihaz"], "cuda")
+        self.assertEqual(json_icerik["compute_type"], "float16")
+        self.assertEqual(json_icerik["model"], "large-v3")
+        self.assertEqual(json_icerik["sureler"]["stt"], 4.2)
+
 
 if __name__ == "__main__":
     unittest.main()

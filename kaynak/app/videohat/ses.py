@@ -34,12 +34,9 @@ def _ffmpeg_calistir(komut: list[str]) -> subprocess.CompletedProcess:
         raise IsHatasi(f"FFmpeg başlatılamadı: {hata}") from hata
 
 
-def cikar(video: Path, hedef_wav: Path, sr: int = 48000) -> None:
-    """Videodan sesi mono PCM 16-bit WAV olarak çıkarır."""
-    video = Path(video)
-    hedef_wav = Path(hedef_wav)
-    hedef_wav.parent.mkdir(parents=True, exist_ok=True)
-    komut = [
+def cikar_komutu(video: Path | str, hedef_wav: Path | str, sr: int = 48000) -> list[str]:
+    """Videodan ses çıkarma ffmpeg komutunu oluşturur."""
+    return [
         str(yollar.ffmpeg()),
         "-y",
         "-i", str(video),
@@ -49,6 +46,14 @@ def cikar(video: Path, hedef_wav: Path, sr: int = 48000) -> None:
         "-c:a", "pcm_s16le",
         str(hedef_wav),
     ]
+
+
+def cikar(video: Path, hedef_wav: Path, sr: int = 48000) -> None:
+    """Videodan sesi mono PCM 16-bit WAV olarak çıkarır."""
+    video = Path(video)
+    hedef_wav = Path(hedef_wav)
+    hedef_wav.parent.mkdir(parents=True, exist_ok=True)
+    komut = cikar_komutu(video, hedef_wav, sr=sr)
     _ffmpeg_calistir(komut)
 
 
