@@ -185,25 +185,11 @@ public partial class DuzenlemePaneli : UserControl
         string klasor = DuzeltmelerKlasoruBul();
         string dersAdi = _dersAdi ?? Ders?.Ad ?? "ders";
 
-        // onceki_id zincirini koru: segmentin son düzeltmesi varsa onun Id'si
-        string? oncekiId = _seciliSegment.Gecmis.Count > 0 ? _seciliSegment.Gecmis[_seciliSegment.Gecmis.Count - 1].Id : null;
-
-        var duzeltme = new Duzeltme
-        {
-            Id = Guid.NewGuid().ToString("D"),
-            Tur = "duzelt",
-            Ders = dersAdi,
-            KaynakOzet = _kaynakOzet,
-            SegmentNo = _seciliSegment.No,
-            Bas = _seciliSegment.Bas,
-            Eski = _seciliSegment.Metin,
-            Yeni = yeniMetin,
-            OncekiId = oncekiId,
-            Kullanici = Kimlik.Varsayilan.KullaniciAdi(),
-            Makine = Kimlik.Varsayilan.MakineAdi(),
-            ZamanUtc = DateTime.UtcNow,
-            Istemci = "1.0.0"
-        };
+        var duzeltme = Duzeltme.DuzenlemeOlustur(
+            _seciliSegment,
+            dersAdi,
+            yeniMetin,
+            _kaynakOzet);
 
         try
         {
@@ -234,8 +220,12 @@ public partial class DuzenlemePaneli : UserControl
             return;
         }
 
-        var sonDk = _seciliSegment.Gecmis[_seciliSegment.Gecmis.Count - 1];
-        var geriAl = Duzeltme.GeriAlOlustur(sonDk, Kimlik.Varsayilan);
+        var geriAl = Duzeltme.GeriAlKaydiUret(_seciliSegment.Gecmis, Kimlik.Varsayilan);
+        if (geriAl == null)
+        {
+            DurumMetni.Text = "Geri alınacak kayıt yok.";
+            return;
+        }
 
         try
         {

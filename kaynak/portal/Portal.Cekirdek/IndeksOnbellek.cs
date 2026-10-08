@@ -134,7 +134,7 @@ public class OnbellekDers
 /// </summary>
 public class OnbellekVerisi
 {
-    public int Surum { get; set; } = 1;
+    public int Surum { get; set; } = IndeksOnbellek.GuncelSurum;
     public DateTime KayitZamaniUtc { get; set; } = DateTime.UtcNow;
     public Dictionary<string, OnbellekDers> Dersler { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -144,7 +144,7 @@ public class OnbellekVerisi
 /// </summary>
 public class IndeksOnbellek
 {
-    public const int GuncelSurum = 1;
+    public const int GuncelSurum = 2;
 
     private static readonly JsonSerializerOptions JsonAyar = new()
     {
