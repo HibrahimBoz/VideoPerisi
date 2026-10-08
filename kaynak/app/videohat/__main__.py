@@ -61,6 +61,27 @@ def _isle(args) -> int:
     return 1 if hatali else 0
 
 
+def _isle_grup(args) -> int:
+    from . import ayar as ayar_mod, grup
+    from .hat import Bayraklar
+    kok = yollar.kok()
+    ayar = ayar_mod.yukle(kok)
+    log = logging.getLogger("videohat")
+    bay = Bayraklar(agir_ses=args.agir_ses, goruntu=args.goruntu)
+    klasor = Path(args.klasor)
+    if not klasor.exists() or not klasor.is_dir():
+        log.error("Klasör bulunamadı: %s", klasor)
+        return 1
+    sonuc = grup.isle_grup(klasor, ayar, bay, referans_kanal_adi=args.referans)
+    for u in sonuc.uyarilar:
+        log.warning("Grup uyarısı: %s", u)
+    if not sonuc.basarili:
+        log.error("Grup işleme başarısız: %s", sonuc.hata)
+        return 1
+    log.info("Grup işleme bitti: %s (%s)", sonuc.ders_adi, sonuc.cikis_klasoru)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="videohat")
     alt = ap.add_subparsers(dest="komut", required=True)
@@ -72,6 +93,11 @@ def main(argv=None) -> int:
     i.add_argument("--upscale", action="store_true", help="Real-ESRGAN x2 (isteğe bağlı)")
     i.add_argument("--model", choices=["large-v3", "medium", "turbo"])
     i.add_argument("--cihaz", choices=["cpu", "cuda"])
+    ig = alt.add_parser("isle-grup", help="çok kameralı ders klasörünü işle")
+    ig.add_argument("klasor", help="ders klasörü")
+    ig.add_argument("--referans", help="referans kamera/kanal adı")
+    ig.add_argument("--goruntu", action="store_true", help="görüntü iyileştirme")
+    ig.add_argument("--agir-ses", action="store_true", help="DeepFilterNet ağır mod")
     alt.add_parser("izle", help="is\\gelen klasörünü izle")
     alt.add_parser("kontrol", help="kendi kendine test")
     args = ap.parse_args(argv)
@@ -83,6 +109,8 @@ def main(argv=None) -> int:
             ag_kilidi.kur()
         if args.komut == "isle":
             return _isle(args)
+        if args.komut == "isle-grup":
+            return _isle_grup(args)
         if args.komut == "izle":
             from . import ayar as ayar_mod, izle
             return izle.dongu(ayar_mod.yukle(kok))
