@@ -22,11 +22,22 @@ public partial class CokAciliOynaticiPenceresi : Window
     private readonly ObservableCollection<TranskriptSatiri> _transkript = [];
     private readonly double _sureSn;
     private readonly string _klasor;
+    private readonly string? _transkriptYolu;
     private GorunumModu _gorunum = new GorunumModu.Izgara();
     private bool _kapatiliyor;
     private bool _kaydiracSurukleniyor;
+    private bool _duzenlemeAcik;
+    private bool _parolaDogrulandi;
+    private int _hataliParolaDenemesi;
+    private DateTime _kilitZamani = DateTime.MinValue;
+    private Transkript? _hamTranskript;
 
     public CokAciliOynaticiPenceresi(DersTanimi ders, double baslangicSanalSn = 0)
+        : this(ders, baslangicSanalSn, null)
+    {
+    }
+
+    public CokAciliOynaticiPenceresi(DersTanimi ders, double baslangicSanalSn, string? transkriptYolu)
     {
         ArgumentNullException.ThrowIfNull(ders);
         InitializeComponent();
@@ -37,6 +48,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         _sureSn = Math.Max(0, ders.ToplamSureSn);
         ZamanKaydiraci.Maximum = Math.Max(1, _sureSn);
         _klasor = Path.GetDirectoryName(ders.DosyaYolu ?? string.Empty) ?? string.Empty;
+        _transkriptYolu = transkriptYolu;
         _kanallar = new Dictionary<string, KanalGorunumu>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var kanal in ders.Kanallar)
@@ -81,7 +93,7 @@ public partial class CokAciliOynaticiPenceresi : Window
 
         SesKanaliSecici.SelectedItem = _saat.AktifSesKanali;
         TranskriptListesi.ItemsSource = _transkript;
-        TranskriptiYukle(ders);
+        TranskriptiYukle(ders, _transkriptYolu);
         GorunumuUygula();
         TumKanallariGuncelle(true);
 
@@ -94,25 +106,134 @@ public partial class CokAciliOynaticiPenceresi : Window
         }
     }
 
-    private void TranskriptiYukle(DersTanimi ders)
+    public CokAciliOynaticiPenceresi(DersKaydi kayit, double baslangicSanalSn = 0)
+        : this(DersKaydindanTanima(kayit), baslangicSanalSn, kayit.JsonYolu)
     {
-        if (string.IsNullOrWhiteSpace(_klasor) || !Directory.Exists(_klasor))
+    }
+
+    /// <summary>
+    /// Arama akışından veya taranan ders kaydından pencereyi açar.
+    /// Ders klasöründe ders.json varsa çok açılı oynatıcı penceresi açılır; yoksa tekli oynatıcı açılır.
+    /// </summary>
+    public static Window Ac(DersKaydi kayit, double baslangicSanalSn = 0)
+    {
+        ArgumentNullException.ThrowIfNull(kayit);
+        string dersJson = Path.Combine(kayit.KlasorYolu, "ders.json");
+        if (File.Exists(dersJson))
         {
-            TranskriptDurumu.Text = "Ders klasörü bulunamadı; transkript yüklenemedi.";
-            return;
+            var ders = DersTanimiOkuyucu.Oku(dersJson);
+            var pencere = new CokAciliOynaticiPenceresi(ders, baslangicSanalSn, kayit.JsonYolu);
+            pencere.Show();
+            return pencere;
         }
 
-        string? json;
-        try
+        // ders.json yoksa tek video modunda oynatıcı açılır
+        var tekliPencere = new CokAciliOynaticiPenceresi(kayit, baslangicSanalSn);
+        tekliPencere.Show();
+        return tekliPencere;
+    }
+
+    private static DersTanimi DersKaydindanTanima(DersKaydi kayit)
+    {
+        ArgumentNullException.ThrowIfNull(kayit);
+        string dersJson = Path.Combine(kayit.KlasorYolu, "ders.json");
+        if (File.Exists(dersJson))
         {
-            json = Directory.GetFiles(_klasor, "*.json")
-                .FirstOrDefault(yol => !string.Equals(Path.GetFileName(yol), "ders.json", StringComparison.OrdinalIgnoreCase));
+            return DersTanimiOkuyucu.Oku(dersJson);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+
+        var kanal = new Kanal(
+            kayit.Ad,
+            0.0,
+            0.0,
+            true,
+            kayit.VideoYolu != null
+                ? [new ParcaTanimi(kayit.VideoYolu, 0.0, 86400.0, 0.0, "video")]
+                : []
+        );
+        return new DersTanimi(
+            1,
+            kayit.Ad,
+            kayit.Ad,
+            [kanal],
+            new SenkronBilgisi("tekli", 0.0, 1.0, true),
+            Array.Empty<ElleIsaret>(),
+            kayit.JsonYolu
+        );
+    }
+
+    private void TranskriptiYukle(DersTanimi ders, string? transkriptYolu)
+    {
+        string? json = null;
+
+        // 1. Ders kaydının belirttiği veya doğrudan iletilen transkript yolu
+        if (!string.IsNullOrWhiteSpace(transkriptYolu) && File.Exists(transkriptYolu))
         {
-            TranskriptDurumu.Text = "Transkript dosyaları listelenemedi: " + ex.Message;
-            return;
+            json = transkriptYolu;
         }
+
+        // 2. Ders adı ile eşleşen veya klasör adından türetilen JSON dosyası
+        if (json == null && !string.IsNullOrWhiteSpace(_klasor) && Directory.Exists(_klasor))
+        {
+            string adayAdJson = Path.Combine(_klasor, ders.Ad + ".json");
+            if (File.Exists(adayAdJson))
+            {
+                json = adayAdJson;
+            }
+            else
+            {
+                string klasorAdi = Path.GetFileName(_klasor);
+                if (klasorAdi.EndsWith("_videoperisi", StringComparison.OrdinalIgnoreCase))
+                {
+                    string beklenen = klasorAdi.Substring(0, klasorAdi.Length - "_videoperisi".Length);
+                    string adayVpJson = Path.Combine(_klasor, beklenen + ".json");
+                    if (File.Exists(adayVpJson))
+                    {
+                        json = adayVpJson;
+                    }
+                }
+            }
+        }
+
+        // 3. Klasördeki diğer JSON'lar arasından transkript formatına uyanı ara
+        if (json == null && !string.IsNullOrWhiteSpace(_klasor) && Directory.Exists(_klasor))
+        {
+            try
+            {
+                var adaylar = Directory.GetFiles(_klasor, "*.json")
+                    .Where(yol =>
+                    {
+                        string dosyaAdi = Path.GetFileName(yol);
+                        return !string.Equals(dosyaAdi, "ders.json", StringComparison.OrdinalIgnoreCase) &&
+                               !string.Equals(dosyaAdi, "parola.json", StringComparison.OrdinalIgnoreCase) &&
+                               !string.Equals(dosyaAdi, "ayarlar.json", StringComparison.OrdinalIgnoreCase) &&
+                               !string.Equals(dosyaAdi, "elle-ofsetler.json", StringComparison.OrdinalIgnoreCase);
+                    });
+
+                foreach (var aday in adaylar)
+                {
+                    try
+                    {
+                        var t = TranskriptOkuyucu.Oku(aday);
+                        if (t.Segmentler.Count > 0)
+                        {
+                            json = aday;
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Geçersiz adayları atla
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                TranskriptDurumu.Text = "Transkript dosyaları listelenemedi: " + ex.Message;
+                return;
+            }
+        }
+
         if (json == null)
         {
             TranskriptDurumu.Text = "Bu ders için transkript bulunamadı.";
@@ -122,15 +243,181 @@ public partial class CokAciliOynaticiPenceresi : Window
         try
         {
             var transkript = TranskriptOkuyucu.Oku(json);
-            foreach (var segment in transkript.Segmentler)
-            {
-                _transkript.Add(new TranskriptSatiri(segment, ZamanBicimle(segment.Bas) + "  " + segment.Metin));
-            }
-            TranskriptDurumu.Text = _transkript.Count == 0 ? "Transkriptte gösterilecek segment yok." : string.Empty;
+            _hamTranskript = transkript;
+            TranskriptiGuncelle();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             TranskriptDurumu.Text = "Transkript okunamadı: " + ex.Message;
+        }
+    }
+
+    private void TranskriptiGuncelle()
+    {
+        if (_hamTranskript == null) return;
+        _transkript.Clear();
+        var depo = new DuzeltmeDeposu(_klasor);
+        var birlestirme = depo.Birlestir(_hamTranskript);
+        foreach (var ef in birlestirme.Segmentler)
+        {
+            string rozet = ef.Cakisma ? "  [ÇAKIŞMA]" : string.Empty;
+            _transkript.Add(new TranskriptSatiri(ef, ZamanBicimle(ef.Bas) + "  " + ef.Metin + rozet));
+        }
+        TranskriptDurumu.Text = _transkript.Count == 0 ? "Transkriptte gösterilecek segment yok." : string.Empty;
+    }
+
+    private void Duzenle_Click(object sender, RoutedEventArgs e)
+    {
+        if (_duzenlemeAcik)
+        {
+            _duzenlemeAcik = false;
+            DuzenlemePaneli.Visibility = Visibility.Collapsed;
+            DuzenleDugmesi.Content = "Düzenle";
+            return;
+        }
+
+        if (!_parolaDogrulandi)
+        {
+            if (_hataliParolaDenemesi >= 5 && (DateTime.UtcNow - _kilitZamani).TotalSeconds < 30)
+            {
+                int kalan = 30 - (int)(DateTime.UtcNow - _kilitZamani).TotalSeconds;
+                MessageBox.Show(this, $"Çok fazla hatalı deneme yapıldı. Lütfen {kalan} saniye bekleyin.", "Bekleyin", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var parolaYonetici = new Parola(_klasor);
+            string? parolaYolu = null;
+            if (File.Exists(parolaYonetici.ParolaDosyaYolu))
+            {
+                parolaYolu = parolaYonetici.ParolaDosyaYolu;
+            }
+            else if (File.Exists(Path.Combine(_klasor, "parola.json")))
+            {
+                parolaYolu = Path.Combine(_klasor, "parola.json");
+            }
+            else
+            {
+                string? kokDizin = Path.GetDirectoryName(_klasor);
+                if (!string.IsNullOrWhiteSpace(kokDizin) && File.Exists(Path.Combine(kokDizin, ".portal", "parola.json")))
+                {
+                    parolaYolu = Path.Combine(kokDizin, ".portal", "parola.json");
+                }
+            }
+
+            if (parolaYolu == null)
+            {
+                MessageBox.Show(this, "Parola tanımlı değil — yöneticiye başvurun.", "Yetki Yok", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var parolaDlg = new ParolaGirisPenceresi { Owner = this };
+            if (parolaDlg.ShowDialog() != true) return;
+
+            string girilen = parolaDlg.ParolaMetni;
+            bool gecerli = parolaYonetici.Dogrula(girilen);
+            if (!gecerli && !string.IsNullOrWhiteSpace(parolaYolu) && File.Exists(parolaYolu))
+            {
+                var altParola = new Parola(Path.GetDirectoryName(Path.GetDirectoryName(parolaYolu)));
+                gecerli = altParola.Dogrula(girilen);
+            }
+
+            if (!gecerli)
+            {
+                _hataliParolaDenemesi++;
+                if (_hataliParolaDenemesi >= 5)
+                {
+                    _kilitZamani = DateTime.UtcNow;
+                }
+                MessageBox.Show(this, "Parola hatalı!", "Hata", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            _parolaDogrulandi = true;
+            _hataliParolaDenemesi = 0;
+        }
+
+        _duzenlemeAcik = true;
+        DuzenlemePaneli.Visibility = Visibility.Visible;
+        DuzenleDugmesi.Content = "Düzenlemeyi Kapat";
+        if (TranskriptListesi.SelectedItem is TranskriptSatiri secili)
+        {
+            SegmentMetinKutusu.Text = secili.Segment.Metin;
+        }
+    }
+
+    private void KaydetDuzenleme_Click(object sender, RoutedEventArgs e)
+    {
+        if (TranskriptListesi.SelectedItem is not TranskriptSatiri secili)
+        {
+            MessageBox.Show(this, "Lütfen düzenlenecek segmenti seçin.", "Segment Seçilmedi", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string yeniMetin = SegmentMetinKutusu.Text?.Trim() ?? string.Empty;
+        if (string.Equals(secili.Segment.Metin, yeniMetin, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string? oncekiId = null;
+        if (secili.Segment is EfektifSegment ef && ef.Gecmis.Count > 0)
+        {
+            oncekiId = ef.Gecmis[^1].Id;
+        }
+
+        var duzeltme = new Duzeltme
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Tur = "duzelt",
+            Ders = _saat.Ders.Ad,
+            KaynakOzet = _hamTranskript?.KaynakOzet,
+            SegmentNo = secili.Segment.No,
+            Bas = secili.Segment.Bas,
+            Eski = secili.Segment.Metin,
+            Yeni = yeniMetin,
+            OncekiId = oncekiId,
+            Kullanici = Kimlik.Varsayilan.KullaniciAdi(),
+            Makine = Kimlik.Varsayilan.MakineAdi(),
+            ZamanUtc = DateTime.UtcNow,
+            Istemci = "1.0.0"
+        };
+
+        try
+        {
+            var depo = new DuzeltmeDeposu(_klasor);
+            depo.Yaz(duzeltme);
+            TranskriptiGuncelle();
+            DuzenlemeDurumu.Text = "Kaydedildi.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "Düzeltme kaydedilemedi: " + ex.Message, "Kayıt Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void GeriAl_Click(object sender, RoutedEventArgs e)
+    {
+        if (TranskriptListesi.SelectedItem is not TranskriptSatiri secili ||
+            secili.Segment is not EfektifSegment ef ||
+            ef.Gecmis.Count == 0)
+        {
+            MessageBox.Show(this, "Bu segment için geri alınacak düzeltme yok.", "Geri Alınamaz", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var sonDk = ef.Gecmis[^1];
+        var geriAl = Duzeltme.GeriAlOlustur(sonDk, Kimlik.Varsayilan);
+
+        try
+        {
+            var depo = new DuzeltmeDeposu(_klasor);
+            depo.Yaz(geriAl);
+            TranskriptiGuncelle();
+            DuzenlemeDurumu.Text = "Geri alındı.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "Geri alma kaydedilemedi: " + ex.Message, "Kayıt Hatası", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -148,58 +435,76 @@ public partial class CokAciliOynaticiPenceresi : Window
 
     private void TumKanallariGuncelle(bool zorla)
     {
-        double sanalSn = _saat.Simdi();
         foreach (var state in _kanallar.Values)
         {
-            try
+            TekKanaliGuncelle(state, zorla);
+        }
+    }
+
+    private void TekKanaliGuncelle(KanalGorunumu state, bool zorla)
+    {
+        double sanalSn = _saat.Simdi();
+        try
+        {
+            var (dosya, hedefYerelSn, kayitVar) = state.Kanal.SanalDenYerele(sanalSn, _saat.ElleOfsetAl(state.Kanal.Ad));
+            if (!kayitVar || string.IsNullOrWhiteSpace(dosya) || !File.Exists(dosya))
             {
-                var (dosya, hedefYerelSn, kayitVar) = state.Kanal.SanalDenYerele(sanalSn, _saat.ElleOfsetAl(state.Kanal.Ad));
-                if (!kayitVar || string.IsNullOrWhiteSpace(dosya) || !File.Exists(dosya))
-                {
-                    HazirlaSonrakiParca(state, sanalSn);
-                    KanaliGriYap(state, kayitVar ? "Video dosyası bulunamadı" : "kayıt yok");
-                    continue;
-                }
-
-                string kaynak = VideoKaynaginiSec(state.Kanal, dosya);
-                if (zorla || !string.Equals(state.AktifDosya, kaynak, StringComparison.OrdinalIgnoreCase))
-                {
-                    MedyayiAc(state, kaynak, hedefYerelSn, _saat.Oynatiliyor);
-                }
-                else
-                {
-                    state.GriKutusu.Visibility = Visibility.Collapsed;
-                    state.Video.Visibility = Visibility.Visible;
-                }
-
-                var eylem = _saat.Karar(state.Kanal, state.Oynatici.Time / 1000.0);
-                switch (eylem)
-                {
-                    case Eylem.HafifDuzelt hafif:
-                        state.Oynatici.SetRate((float)(_saat.Hiz * hafif.HizKatsayisi));
-                        break;
-                    case Eylem.Atla atla:
-                        state.Oynatici.Time = (long)(atla.HedefYerelSn * 1000);
-                        state.Oynatici.SetRate((float)_saat.Hiz);
-                        break;
-                    case Eylem.Gizle gizle:
-                        KanaliGriYap(state, gizle.Neden ?? "kayıt yok");
-                        break;
-                    default:
-                        if (!_saat.HisterezisAktifMi(state.Kanal.Ad))
-                        {
-                            state.Oynatici.SetRate((float)_saat.Hiz);
-                        }
-                        break;
-                }
-
-                state.Oynatici.Mute = _saat.KanalSessizMi(state.Kanal);
                 HazirlaSonrakiParca(state, sanalSn);
+                KanaliGriYap(state, kayitVar ? "Video dosyası bulunamadı" : "kayıt yok");
+                return;
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+
+            state.AktifAsilDosya = dosya;
+            string kaynak = VideoKaynaginiSec(state.Kanal, dosya);
+            bool dosyaDegisti = !string.Equals(state.AktifDosya, kaynak, StringComparison.OrdinalIgnoreCase);
+            bool oncedenGriydi = state.GriKutusu.Visibility == Visibility.Visible;
+
+            if (zorla || dosyaDegisti)
             {
-                KanaliGriYap(state, "Kanal açılamadı: " + ex.Message);
+                MedyayiAc(state, kaynak, dosya, hedefYerelSn, _saat.Oynatiliyor);
             }
+            else
+            {
+                state.GriKutusu.Visibility = Visibility.Collapsed;
+                state.Video.Visibility = Visibility.Visible;
+
+                if (oncedenGriydi)
+                {
+                    state.Oynatici.Time = Math.Max(0, (long)(hedefYerelSn * 1000));
+                    if (_saat.Oynatiliyor)
+                    {
+                        state.Oynatici.Play();
+                    }
+                }
+            }
+
+            var eylem = _saat.Karar(state.Kanal, state.Oynatici.Time / 1000.0);
+            switch (eylem)
+            {
+                case Eylem.HafifDuzelt hafif:
+                    state.Oynatici.SetRate((float)(_saat.Hiz * hafif.HizKatsayisi));
+                    break;
+                case Eylem.Atla atla:
+                    state.Oynatici.Time = (long)(atla.HedefYerelSn * 1000);
+                    state.Oynatici.SetRate((float)_saat.Hiz);
+                    break;
+                case Eylem.Gizle gizle:
+                    KanaliGriYap(state, gizle.Neden ?? "kayıt yok");
+                    return;
+                default:
+                    if (!_saat.HisterezisAktifMi(state.Kanal.Ad))
+                    {
+                        state.Oynatici.SetRate((float)_saat.Hiz);
+                    }
+                    break;
+            }
+
+            state.Oynatici.Mute = _saat.KanalSessizMi(state.Kanal);
+            HazirlaSonrakiParca(state, sanalSn);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+        {
+            KanaliGriYap(state, "Kanal açılamadı: " + ex.Message);
         }
     }
 
@@ -223,7 +528,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         }
     }
 
-    private void MedyayiAc(KanalGorunumu state, string dosya, double yerelSn, bool oynat)
+    private void MedyayiAc(KanalGorunumu state, string dosya, string asilDosya, double yerelSn, bool oynat)
     {
         Media yeni;
         if (string.Equals(state.HazirDosya, dosya, StringComparison.OrdinalIgnoreCase) && state.HazirMedya != null)
@@ -242,9 +547,11 @@ public partial class CokAciliOynaticiPenceresi : Window
         state.Oynatici.Media = yeni;
         state.AktifMedya = yeni;
         state.AktifDosya = dosya;
+        state.AktifAsilDosya = asilDosya;
         state.GriKutusu.Visibility = Visibility.Collapsed;
         state.Video.Visibility = Visibility.Visible;
         state.Oynatici.Time = Math.Max(0, (long)(yerelSn * 1000));
+        state.Oynatici.Mute = _saat.KanalSessizMi(state.Kanal);
         if (oynat) state.Oynatici.Play();
         eski?.Dispose();
     }
@@ -270,11 +577,23 @@ public partial class CokAciliOynaticiPenceresi : Window
     private void KanalBitisiniIsle(KanalGorunumu state)
     {
         if (_kapatiliyor) return;
-        TumKanallariGuncelle(true);
+        TekKanaliGuncelle(state, true);
     }
 
     private static void KanaliGriYap(KanalGorunumu state, string neden)
     {
+        try
+        {
+            if (state.Oynatici.IsPlaying)
+            {
+                state.Oynatici.Pause();
+            }
+        }
+        catch
+        {
+            // Oynatıcı hata durumundaysa pause hatasını yut
+        }
+        state.Oynatici.Mute = true;
         state.GriKutusu.Text = neden;
         state.GriKutusu.Visibility = Visibility.Visible;
         state.Video.Visibility = Visibility.Collapsed;
@@ -391,6 +710,12 @@ public partial class CokAciliOynaticiPenceresi : Window
     {
         if (TranskriptListesi.SelectedItem is TranskriptSatiri satir)
         {
+            if (_duzenlemeAcik)
+            {
+                SegmentMetinKutusu.Text = satir.Segment.Metin;
+                DuzenlemeDurumu.Text = satir.Segment is EfektifSegment ef && ef.Cakisma ? "Bu segmentte çakışma var!" : string.Empty;
+            }
+
             _saat.Ara(satir.Segment.Bas);
             ZamanKaydiraci.Value = Math.Clamp(satir.Segment.Bas, 0, Math.Max(1, _sureSn));
             TumKanallariGuncelle(true);
@@ -479,9 +804,30 @@ public partial class CokAciliOynaticiPenceresi : Window
     private double AnlikSanalZaman(string kanalAdi)
     {
         var state = _kanallar[kanalAdi];
-        if (string.IsNullOrWhiteSpace(state.AktifDosya)) return _saat.Simdi();
-        try { return state.Kanal.YereldenSanala(state.AktifDosya, state.Oynatici.Time / 1000.0, _saat.ElleOfsetAl(kanalAdi)); }
-        catch (ArgumentException) { return _saat.Simdi(); }
+        double yerelSn = state.Oynatici.Time / 1000.0;
+        double ekOfset = _saat.ElleOfsetAl(kanalAdi);
+
+        // Önizleme videosu oynatılıyorsa asıl parçanın dosyasını eşle
+        string? asilDosya = state.AktifAsilDosya ?? state.Kanal.OnizlemeDosyasiniEslestir(state.AktifDosya, yerelSn);
+
+        if (!string.IsNullOrWhiteSpace(asilDosya))
+        {
+            try
+            {
+                return state.Kanal.YereldenSanala(asilDosya, yerelSn, ekOfset);
+            }
+            catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
+            {
+                var parca = state.Kanal.Parcalar.FirstOrDefault(p => string.Equals(p.Dosya, asilDosya, StringComparison.OrdinalIgnoreCase));
+                if (parca?.Dosya != null)
+                {
+                    double kirp = Math.Clamp(yerelSn, parca.YerelBas, parca.YerelSon);
+                    try { return state.Kanal.YereldenSanala(parca.Dosya, kirp, ekOfset); } catch { }
+                }
+            }
+        }
+
+        return _saat.Simdi();
     }
 
     private void OfsetDisaAktar_Click(object sender, RoutedEventArgs e)
@@ -552,6 +898,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         public TextBlock Etiket { get; } = etiket;
         public Media? AktifMedya { get; set; }
         public string? AktifDosya { get; set; }
+        public string? AktifAsilDosya { get; set; }
         public Media? HazirMedya { get; set; }
         public string? HazirDosya { get; set; }
     }
@@ -619,6 +966,45 @@ public partial class CokAciliOynaticiPenceresi : Window
             }
             _uygula(kanalB, _isaretA.Value, _isaretB.Value);
             DialogResult = true;
+        }
+    }
+
+    private sealed class ParolaGirisPenceresi : Window
+    {
+        private readonly PasswordBox _parolaKutusu;
+        public string ParolaMetni => _parolaKutusu.Password;
+
+        public ParolaGirisPenceresi()
+        {
+            Title = "Düzenleme parolası";
+            Width = 320;
+            Height = 170;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            ResizeMode = ResizeMode.NoResize;
+            Background = new SolidColorBrush(Color.FromRgb(23, 25, 29));
+            Foreground = Brushes.White;
+
+            var panel = new StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new TextBlock { Text = "Düzenleme parolası:", Margin = new Thickness(0, 0, 0, 8), Foreground = Brushes.White });
+            _parolaKutusu = new PasswordBox
+            {
+                Margin = new Thickness(0, 0, 0, 12),
+                Background = new SolidColorBrush(Color.FromRgb(32, 35, 41)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(58, 63, 75))
+            };
+            panel.Children.Add(_parolaKutusu);
+
+            var butonlar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var tamam = new Button { Content = "Giriş", Padding = new Thickness(12, 4, 12, 4), IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+            tamam.Click += (_, _) => { DialogResult = true; };
+            var iptal = new Button { Content = "İptal", Padding = new Thickness(12, 4, 12, 4), IsCancel = true };
+            iptal.Click += (_, _) => { DialogResult = false; };
+            butonlar.Children.Add(tamam);
+            butonlar.Children.Add(iptal);
+            panel.Children.Add(butonlar);
+
+            Content = panel;
         }
     }
 }

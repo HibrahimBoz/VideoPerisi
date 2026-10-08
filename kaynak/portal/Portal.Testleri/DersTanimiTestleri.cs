@@ -657,4 +657,27 @@ public class DersTanimiTestleri : IDisposable
         double sanal2 = kanal.YereldenSanala("tek_video.mp4", 125.0);
         Assert.Equal(125.0, sanal2, precision: 5);
     }
+
+    [Fact]
+    public void OnizlemeDosyasiniEslestir_OnizlemeDosyasiniAsilParcayaEsler()
+    {
+        var kanal = new Kanal(
+            "kamera1",
+            0.0,
+            0.0,
+            true,
+            new List<ParcaTanimi>
+            {
+                new("kamera1/parca01.mp4", 0.0, 600.0, 0.0, "kayit")
+            }
+        );
+
+        // Asıl dosya doğrudan eşleşir
+        var asil = kanal.OnizlemeDosyasiniEslestir("kamera1/parca01.mp4", 50.0);
+        Assert.Equal("kamera1/parca01.mp4", asil);
+
+        // Önizleme dosyası asıl parçaya eşlenir
+        var onizleme = kanal.OnizlemeDosyasiniEslestir("kamera1_onizleme.mp4", 50.0);
+        Assert.Equal("kamera1/parca01.mp4", onizleme);
+    }
 }

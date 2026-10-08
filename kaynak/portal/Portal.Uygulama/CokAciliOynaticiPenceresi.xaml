@@ -34,9 +34,24 @@
             <Grid x:Name="VideoIzgarasi" Grid.Column="0" Background="#101114"/>
             <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"/>
             <DockPanel Grid.Column="2" LastChildFill="True" Margin="8,0,0,0">
-                <TextBlock DockPanel.Dock="Top" Text="Transkript" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <TextBlock Text="Transkript" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button x:Name="DuzenleDugmesi" DockPanel.Dock="Right" Content="Düzenle"
+                            Padding="10,4" Click="Duzenle_Click" HorizontalAlignment="Right"/>
+                </DockPanel>
                 <TextBlock x:Name="TranskriptDurumu" DockPanel.Dock="Bottom" Foreground="#B9BEC7"
                            TextWrapping="Wrap" Margin="0,8,0,0"/>
+                <StackPanel x:Name="DuzenlemePaneli" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,0">
+                    <TextBlock Text="Segment metnini düzenle:" Margin="0,0,0,4" Foreground="#B9BEC7"/>
+                    <TextBox x:Name="SegmentMetinKutusu" Height="60" TextWrapping="Wrap" AcceptsReturn="True"
+                             Background="#202329" Foreground="#F1F2F4" BorderBrush="#3A3F4B" Margin="0,0,0,6"/>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock x:Name="DuzenlemeDurumu" DockPanel.Dock="Left" Foreground="#E5A93C"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <Button DockPanel.Dock="Right" Content="Kaydet" Click="KaydetDuzenleme_Click" Padding="12,4"/>
+                        <Button DockPanel.Dock="Right" Content="Geri Al" Click="GeriAl_Click" Margin="0,0,6,0" Padding="10,4"/>
+                    </DockPanel>
+                </StackPanel>
                 <ListBox x:Name="TranskriptListesi" Background="#202329" Foreground="#F1F2F4"
                          BorderThickness="0" SelectionChanged="TranskriptListesi_SelectionChanged"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">

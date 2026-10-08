@@ -239,6 +239,30 @@ public record Kanal(
         return SanalZamanHesapla(kanalZamani, ekOfsetSn);
     }
 
+    /// <summary>
+    /// Önizleme videosu veya dosya adı verildiğinde, kanaldaki asıl parçanın dosyasını eşler.
+    /// Doğrudan eşleşme yoksa (ör. önizleme mp4), yerel saniyeye uyan asıl parça döner.
+    /// </summary>
+    public string? OnizlemeDosyasiniEslestir(string? dosyaAdi, double yerelSn = 0.0)
+    {
+        if (string.IsNullOrWhiteSpace(dosyaAdi) || Parcalar == null || Parcalar.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var p in Parcalar)
+        {
+            if (p.Dosya != null && DosyaEslesiyorMu(p.Dosya, dosyaAdi))
+            {
+                return p.Dosya;
+            }
+        }
+
+        var parca = Parcalar.FirstOrDefault(p => p.Dosya != null && yerelSn >= p.YerelBas - 0.05 && yerelSn <= p.YerelSon + 0.05)
+                 ?? Parcalar.FirstOrDefault(p => p.Dosya != null);
+        return parca?.Dosya;
+    }
+
     private static bool DosyaEslesiyorMu(string dosyaA, string? dosyaB)
     {
         if (dosyaB == null) return false;
