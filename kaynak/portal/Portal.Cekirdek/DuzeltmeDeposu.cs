@@ -415,96 +415,231 @@ public class DuzeltmeDeposu
                 continue;
             }
 
-            // Aynı onceki_id'yi paylaşan ≥2 düzeltme → Cakisma=true (ikisi de geçmişte kalır)
-            var cakisanOncekiIdler = sirali
-                .Where(d => !string.IsNullOrEmpty(d.OncekiId))
-                .GroupBy(d => d.OncekiId!)
-                .Where(g => g.Count() >= 2)
-                .Select(g => g.Key)
-                .ToHashSet(StringComparer.Ordinal);
-
-            bool cakisma = cakisanOncekiIdler.Count > 0;
+            // null OncekiId kök anahtardır. Aynı anahtarı paylaşan ≥2 kayıt çakışır.
+            // "cozum" dalları birleştirir: elenmez, çakışma bayrağını kaldırır.
+            var (elenenIdler, cakisma) = CakismayiCoz(sirali);
             string guncelMetin = s.Metin;
 
-            if (!cakisma)
+            foreach (var d in sirali)
             {
-                foreach (var d in sirali)
+                if (!string.IsNullOrEmpty(d.Id) && elenenIdler.Contains(d.Id))
                 {
-                    if (string.Equals(d.Tur, "geri_al", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var hedef = sirali.FirstOrDefault(x => x.Id == d.GeriAlHedef)
-                                 ?? tumDuzeltmeler.FirstOrDefault(x => x.Id == d.GeriAlHedef);
-                        if (hedef != null)
-                        {
-                            guncelMetin = hedef.Eski;
-                        }
-                        else if (!string.IsNullOrEmpty(d.Yeni))
-                        {
-                            guncelMetin = d.Yeni;
-                        }
-                    }
-                    else
-                    {
-                        guncelMetin = d.Yeni;
-                    }
-                }
-            }
-            else
-            {
-                // Çakışan düzeltmeler ve onların ardılları elenir
-                var elenenIdler = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var d in sirali)
-                {
-                    if (d.OncekiId != null && cakisanOncekiIdler.Contains(d.OncekiId))
-                    {
-                        elenenIdler.Add(d.Id);
-                    }
+                    continue;
                 }
 
-                bool yeniElendi;
-                do
-                {
-                    yeniElendi = false;
-                    foreach (var d in sirali)
-                    {
-                        if (d.OncekiId != null && elenenIdler.Contains(d.OncekiId) && elenenIdler.Add(d.Id))
-                        {
-                            yeniElendi = true;
-                        }
-                    }
-                } while (yeniElendi);
-
-                foreach (var d in sirali)
-                {
-                    if (elenenIdler.Contains(d.Id))
-                    {
-                        continue;
-                    }
-
-                    if (string.Equals(d.Tur, "geri_al", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var hedef = sirali.FirstOrDefault(x => x.Id == d.GeriAlHedef)
-                                 ?? tumDuzeltmeler.FirstOrDefault(x => x.Id == d.GeriAlHedef);
-                        if (hedef != null)
-                        {
-                            guncelMetin = hedef.Eski;
-                        }
-                        else if (!string.IsNullOrEmpty(d.Yeni))
-                        {
-                            guncelMetin = d.Yeni;
-                        }
-                    }
-                    else
-                    {
-                        guncelMetin = d.Yeni;
-                    }
-                }
+                guncelMetin = MetniUygula(d, sirali, tumDuzeltmeler, guncelMetin);
             }
 
             efektifSegmentler.Add(new EfektifSegment(s.No, s.Bas, s.Son, guncelMetin, sirali, cakisma));
         }
 
         return new BirlestirmeSonucu(efektifSegmentler, yetimler, AtlananDosyaSayisi);
+    }
+
+    /// <summary>null / boş onceki_id çakışma grubunda ortak kök sayılır.</summary>
+    private const string KokOncekiAnahtar = "\0kok";
+
+    /// <summary>
+    /// Elenmemiş zincirin ucundaki kayıt kimliği. Çakışmada elenen dallar uca sayılmaz.
+    /// Kayıt yoksa veya tümü elendiyse null (kök).
+    /// </summary>
+    public static string? ElenmemisZincirUcu(IReadOnlyList<Duzeltme>? gecmis)
+    {
+        if (gecmis == null || gecmis.Count == 0)
+        {
+            return null;
+        }
+
+        var sirali = gecmis
+            .OrderBy(d => d.ZamanUtc)
+            .ThenBy(d => d.Id, StringComparer.Ordinal)
+            .ToList();
+        var (elenen, _) = CakismayiCoz(sirali);
+        string? uc = null;
+        foreach (var d in sirali)
+        {
+            if (!string.IsNullOrEmpty(d.Id) && !elenen.Contains(d.Id))
+            {
+                uc = d.Id;
+            }
+        }
+
+        return uc;
+    }
+
+    private static string OncekiAnahtar(Duzeltme d) =>
+        string.IsNullOrEmpty(d.OncekiId) ? KokOncekiAnahtar : d.OncekiId!;
+
+    private static bool CozumKaydiMi(Duzeltme d) =>
+        string.Equals(d.Tur, "cozum", StringComparison.OrdinalIgnoreCase);
+
+    private static bool GeriAlKaydiMi(Duzeltme d) =>
+        string.Equals(d.Tur, "geri_al", StringComparison.OrdinalIgnoreCase);
+
+    private static (HashSet<string> Elenen, bool Cakisma) CakismayiCoz(List<Duzeltme> sirali)
+    {
+        var elenen = new HashSet<string>(StringComparer.Ordinal);
+        if (sirali.Count == 0)
+        {
+            return (elenen, false);
+        }
+
+        var gruplar = sirali.GroupBy(OncekiAnahtar, StringComparer.Ordinal).ToList();
+
+        foreach (var g in gruplar)
+        {
+            if (g.Count() < 2)
+            {
+                continue;
+            }
+
+            var cozumler = new List<Duzeltme>();
+            foreach (var d in g)
+            {
+                if (CozumKaydiMi(d))
+                {
+                    cozumler.Add(d);
+                }
+                else if (!string.IsNullOrEmpty(d.Id))
+                {
+                    elenen.Add(d.Id);
+                }
+            }
+
+            // Aynı ebeveynde tek çözüm dalları birleştirir; birden fazlası yeniden çakışır.
+            if (cozumler.Count != 1)
+            {
+                foreach (var d in cozumler)
+                {
+                    if (!string.IsNullOrEmpty(d.Id))
+                    {
+                        elenen.Add(d.Id);
+                    }
+                }
+            }
+        }
+
+        bool degisti;
+        do
+        {
+            degisti = false;
+            foreach (var d in sirali)
+            {
+                if (string.IsNullOrEmpty(d.Id) || elenen.Contains(d.Id) || CozumKaydiMi(d))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(d.OncekiId) && elenen.Contains(d.OncekiId) && elenen.Add(d.Id))
+                {
+                    degisti = true;
+                }
+            }
+        } while (degisti);
+
+        var geriAlinan = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var d in sirali)
+        {
+            if (GeriAlKaydiMi(d) && !string.IsNullOrEmpty(d.GeriAlHedef))
+            {
+                geriAlinan.Add(d.GeriAlHedef);
+            }
+        }
+
+        bool cakisma = false;
+        foreach (var g in gruplar)
+        {
+            if (g.Count() < 2)
+            {
+                continue;
+            }
+
+            if (!GrupCozulduMu(g, sirali, elenen, geriAlinan))
+            {
+                cakisma = true;
+                break;
+            }
+        }
+
+        return (elenen, cakisma);
+    }
+
+    private static bool GrupCozulduMu(
+        IEnumerable<Duzeltme> grup,
+        List<Duzeltme> sirali,
+        HashSet<string> elenen,
+        HashSet<string> geriAlinan)
+    {
+        foreach (var d in grup)
+        {
+            if (YasayanCozumMu(d, elenen, geriAlinan))
+            {
+                return true;
+            }
+        }
+
+        var uyeIdler = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var d in grup)
+        {
+            if (!string.IsNullOrEmpty(d.Id))
+            {
+                uyeIdler.Add(d.Id);
+            }
+        }
+
+        foreach (var d in sirali)
+        {
+            if (!YasayanCozumMu(d, elenen, geriAlinan))
+            {
+                continue;
+            }
+
+            string? cur = d.OncekiId;
+            var ziyaret = new HashSet<string>(StringComparer.Ordinal);
+            while (!string.IsNullOrEmpty(cur) && ziyaret.Add(cur))
+            {
+                if (uyeIdler.Contains(cur))
+                {
+                    return true;
+                }
+                var onceki = sirali.FirstOrDefault(x => x.Id == cur);
+                cur = onceki?.OncekiId;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool YasayanCozumMu(Duzeltme d, HashSet<string> elenen, HashSet<string> geriAlinan) =>
+        CozumKaydiMi(d) &&
+        !string.IsNullOrEmpty(d.Id) &&
+        !elenen.Contains(d.Id) &&
+        !geriAlinan.Contains(d.Id);
+
+    private static string MetniUygula(
+        Duzeltme d,
+        IReadOnlyList<Duzeltme> sirali,
+        IReadOnlyList<Duzeltme> tum,
+        string guncel)
+    {
+        if (!GeriAlKaydiMi(d))
+        {
+            return d.Yeni;
+        }
+
+        var hedef = sirali.FirstOrDefault(x => x.Id == d.GeriAlHedef)
+                 ?? tum.FirstOrDefault(x => x.Id == d.GeriAlHedef);
+        if (hedef != null)
+        {
+            return hedef.Eski;
+        }
+
+        if (!string.IsNullOrEmpty(d.Yeni))
+        {
+            return d.Yeni;
+        }
+
+        return guncel;
     }
 
     private static Segment? SegmentEslestir(

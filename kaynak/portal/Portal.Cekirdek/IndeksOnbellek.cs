@@ -134,7 +134,7 @@ public class OnbellekDers
 /// </summary>
 public class OnbellekVerisi
 {
-    public int Surum { get; set; } = 1;
+    public int Surum { get; set; } = IndeksOnbellek.GuncelSurum;
     public DateTime KayitZamaniUtc { get; set; } = DateTime.UtcNow;
     public Dictionary<string, OnbellekDers> Dersler { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -144,7 +144,7 @@ public class OnbellekVerisi
 /// </summary>
 public class IndeksOnbellek
 {
-    public const int GuncelSurum = 1;
+    public const int GuncelSurum = 2;
 
     private static readonly JsonSerializerOptions JsonAyar = new()
     {
@@ -213,12 +213,19 @@ public class IndeksOnbellek
                 return null;
             }
 
-            foreach (var ders in veri.Dersler.Values)
+            var gecersizAnahtarlar = new List<string>();
+            foreach (var kvp in veri.Dersler)
             {
-                if (ders == null || ders.Segmentler == null || ders.Anahtar == null)
+                var ders = kvp.Value;
+                if (ders == null || ders.Anahtar == null || !SegmentlerGecerliMi(ders.Segmentler))
                 {
-                    return null;
+                    gecersizAnahtarlar.Add(kvp.Key);
                 }
+            }
+
+            foreach (var k in gecersizAnahtarlar)
+            {
+                veri.Dersler.Remove(k);
             }
 
             return veri;
@@ -228,6 +235,24 @@ public class IndeksOnbellek
             // Bozuk/eski sürüm önbellek sessizce yok sayılır
             return null;
         }
+    }
+
+    private static bool SegmentlerGecerliMi(List<OnbellekSegment>? segmentler)
+    {
+        if (segmentler == null)
+        {
+            return false;
+        }
+
+        foreach (var seg in segmentler)
+        {
+            if (seg == null || seg.Metin == null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
