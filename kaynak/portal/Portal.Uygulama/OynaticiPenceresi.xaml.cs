@@ -38,7 +38,7 @@ public partial class OynaticiPenceresi : Window
     private ResizeMode _oncekiResizeMode = ResizeMode.CanResize;
 
     private readonly DispatcherTimer _yoklamaZamanlayici;
-    private readonly ParolaGecikmeSayaci _parolaSayaci = new();
+    private readonly ParolaGecikmeSayaci _parolaSayaci = ParolaGecikmeSayaci.Paylasilan;
     private bool _duzenlemeAcik;
     private bool _oturumParolaDogrulandi;
     private bool _yoklamaGuncelleniyor;

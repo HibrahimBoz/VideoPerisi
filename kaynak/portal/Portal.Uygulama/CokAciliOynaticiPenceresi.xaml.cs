@@ -27,7 +27,8 @@ public partial class CokAciliOynaticiPenceresi : Window
     private GorunumModu _gorunum = new GorunumModu.Izgara();
     private bool _kapatiliyor;
     private bool _kaydiracSurukleniyor;
-    private readonly ParolaGecikmeSayaci _parolaSayaci = new();
+    private readonly ParolaGecikmeSayaci _parolaSayaci = ParolaGecikmeSayaci.Paylasilan;
+    private bool _programatikSecimYapiliyor;
     private readonly DispatcherTimer _yoklamaZamanlayici;
     private bool _duzenlemeAcik;
     private bool _parolaDogrulandi;
@@ -111,7 +112,13 @@ public partial class CokAciliOynaticiPenceresi : Window
             tile.Children.Add(hata);
             tile.Children.Add(etiket);
             var state = new KanalGorunumu(kanal, player, video, tile, hata, etiket);
-            player.EncounteredError += (_, _) => Dispatcher.InvokeAsync(() => KanaliGriYap(state, "Oynatıcı hatası"));
+            player.EncounteredError += (_, _) => Dispatcher.InvokeAsync(() =>
+            {
+                state.HataVar = true;
+                state.HataDosyasi = state.AktifAsilDosya ?? state.AktifDosya;
+                state.BekleyenKonumSn = null;
+                KanaliGriYap(state, "Oynatıcı hatası");
+            });
             player.EndReached += (_, _) => Dispatcher.InvokeAsync(() => KanalBitisiniIsle(state));
             _kanallar.Add(kanal.Ad, state);
             SesKanaliSecici.Items.Add(kanal.Ad);
@@ -340,7 +347,15 @@ public partial class CokAciliOynaticiPenceresi : Window
         var guncel = _transkript.FirstOrDefault(s => s.Segment.No == seg.No);
         if (guncel != null)
         {
-            TranskriptListesi.SelectedItem = guncel;
+            _programatikSecimYapiliyor = true;
+            try
+            {
+                TranskriptListesi.SelectedItem = guncel;
+            }
+            finally
+            {
+                _programatikSecimYapiliyor = false;
+            }
             if (guncel.Segment is EfektifSegment ef)
             {
                 DuzenlemeKontrolu.SegmentYukle(ef, _saat.Ders.Ad, _hamTranskript?.KaynakOzet);
@@ -505,14 +520,29 @@ public partial class CokAciliOynaticiPenceresi : Window
                 return;
             }
 
-            state.AktifAsilDosya = dosya;
-            string kaynak = VideoKaynaginiSec(state.Kanal, dosya);
+            var (kaynak, onizlemeMi, onizlemeYerelBas) = VideoKaynaginiSec(state, dosya);
+            if (state.HataVar)
+            {
+                if (string.Equals(state.HataDosyasi, dosya, StringComparison.OrdinalIgnoreCase))
+                {
+                    KanaliGriYap(state, "Oynatıcı hatası");
+                    return;
+                }
+                state.HataVar = false;
+                state.HataDosyasi = null;
+            }
+
+            bool parcaDegisti = !string.Equals(state.AktifAsilDosya, dosya, StringComparison.OrdinalIgnoreCase);
             bool dosyaDegisti = !string.Equals(state.AktifDosya, kaynak, StringComparison.OrdinalIgnoreCase);
             bool oncedenGriydi = state.GriKutusu.Visibility == Visibility.Visible;
 
-            if (zorla || dosyaDegisti)
+            if (zorla || parcaDegisti || dosyaDegisti)
             {
-                MedyayiAc(state, kaynak, dosya, hedefYerelSn, _saat.Oynatiliyor);
+                state.OnizlemeMi = onizlemeMi;
+                state.OnizlemeYerelBas = onizlemeYerelBas;
+                double hedefKaynakSn = onizlemeMi ? Math.Max(0, hedefYerelSn - onizlemeYerelBas) : hedefYerelSn;
+                MedyayiAc(state, kaynak, dosya, hedefKaynakSn, _saat.Oynatiliyor);
+                return;
             }
             else
             {
@@ -521,22 +551,38 @@ public partial class CokAciliOynaticiPenceresi : Window
 
                 if (oncedenGriydi)
                 {
-                    state.Oynatici.Time = Math.Max(0, (long)(hedefYerelSn * 1000));
-                    if (_saat.Oynatiliyor)
-                    {
-                        state.Oynatici.Play();
-                    }
+                    Konumlandir(state, onizlemeMi ? Math.Max(0, hedefYerelSn - onizlemeYerelBas) : hedefYerelSn, _saat.Oynatiliyor);
+                    return;
                 }
             }
 
-            var eylem = _saat.Karar(state.Kanal, state.Oynatici.Time / 1000.0);
+            if (state.BekleyenKonumSn.HasValue)
+            {
+                state.Oynatici.Time = Math.Max(0, (long)(state.BekleyenKonumSn.Value * 1000));
+                state.BekleyenKonumSn = null;
+                if (state.BekleyenDuraklat)
+                {
+                    state.Oynatici.Pause();
+                    state.BekleyenDuraklat = false;
+                }
+                return;
+            }
+
+            double oynaticiYerelSn = state.Oynatici.Time / 1000.0;
+            double kararYerelSn = state.OnizlemeMi
+                ? oynaticiYerelSn + state.OnizlemeYerelBas
+                : oynaticiYerelSn;
+            var eylem = _saat.Karar(state.Kanal, kararYerelSn);
             switch (eylem)
             {
                 case Eylem.HafifDuzelt hafif:
                     state.Oynatici.SetRate((float)(_saat.Hiz * hafif.HizKatsayisi));
                     break;
                 case Eylem.Atla atla:
-                    state.Oynatici.Time = (long)(atla.HedefYerelSn * 1000);
+                    double hedefOynaticiSn = state.OnizlemeMi
+                        ? Math.Max(0, atla.HedefYerelSn - state.OnizlemeYerelBas)
+                        : atla.HedefYerelSn;
+                    state.Oynatici.Time = (long)(hedefOynaticiSn * 1000);
                     state.Oynatici.SetRate((float)_saat.Hiz);
                     break;
                 case Eylem.Gizle gizle:
@@ -559,24 +605,60 @@ public partial class CokAciliOynaticiPenceresi : Window
         }
     }
 
-    private string VideoKaynaginiSec(Kanal kanal, string asılDosya)
+    private (string dosya, bool onizlemeMi, double onizlemeYerelBas) VideoKaynaginiSec(
+        KanalGorunumu state, string asılDosya)
     {
+        var kanal = state.Kanal;
         bool odakli = _gorunum switch
         {
             GorunumModu.Odak odak => string.Equals(odak.BuyukKanal, kanal.Ad, StringComparison.OrdinalIgnoreCase),
             GorunumModu.Tek tek => string.Equals(tek.Kanal, kanal.Ad, StringComparison.OrdinalIgnoreCase),
             _ => false
         };
-        if (odakli || string.IsNullOrWhiteSpace(_klasor)) return asılDosya;
-        string desen = kanal.Ad + "_onizleme*.mp4";
-        try
+        if (odakli || string.IsNullOrWhiteSpace(_klasor)) return (asılDosya, false, 0);
+
+        if (!state.OnizlemeOnbellek.TryGetValue(asılDosya, out var onizleme))
         {
-            return Directory.GetFiles(_klasor, desen).OrderBy(yol => yol, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? asılDosya;
+            onizleme = (null, 0);
+            var parca = kanal.Parcalar.FirstOrDefault(p =>
+                p.KayitVar && string.Equals(p.Dosya, asılDosya, StringComparison.OrdinalIgnoreCase));
+            if (parca != null)
+            {
+                try
+                {
+                    string[] adaylar = Directory.GetFiles(_klasor, kanal.Ad + "_onizleme*.mp4")
+                        .OrderBy(yol => yol, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    string kaynakAdi = Path.GetFileNameWithoutExtension(asılDosya);
+                    var parcaOzelAdaylar = adaylar.Where(yol =>
+                        Path.GetFileNameWithoutExtension(yol).Contains(kaynakAdi, StringComparison.OrdinalIgnoreCase)).ToArray();
+                    string? aday = parcaOzelAdaylar.Length == 1
+                        ? parcaOzelAdaylar[0]
+                        : adaylar.Length == 1 && kanal.Parcalar.Count(p => p.KayitVar) == 1
+                            ? adaylar[0]
+                            : null;
+
+                    double eslemeSn = parca.YerelBas + (parca.YerelSon - parca.YerelBas) / 2;
+                    int eslesenParcaSayisi = kanal.Parcalar.Count(p => p.KayitVar &&
+                        eslemeSn >= p.YerelBas && eslemeSn <= p.YerelSon);
+                    if (aday != null && eslesenParcaSayisi == 1 &&
+                        string.Equals(kanal.OnizlemeDosyasiniEslestir(aday, eslemeSn), asılDosya, StringComparison.OrdinalIgnoreCase) &&
+                        File.Exists(aday))
+                    {
+                        onizleme = (aday, parca.YerelBas);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    onizleme = (null, 0);
+                }
+            }
+            state.OnizlemeOnbellek.Add(asılDosya, onizleme);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return asılDosya;
-        }
+
+        return onizleme.Item1 == null
+            ? (asılDosya, false, 0)
+            : (onizleme.Item1, true, onizleme.Item2);
     }
 
     private void MedyayiAc(KanalGorunumu state, string dosya, string asilDosya, double yerelSn, bool oynat)
@@ -601,10 +683,16 @@ public partial class CokAciliOynaticiPenceresi : Window
         state.AktifAsilDosya = asilDosya;
         state.GriKutusu.Visibility = Visibility.Collapsed;
         state.Video.Visibility = Visibility.Visible;
-        state.Oynatici.Time = Math.Max(0, (long)(yerelSn * 1000));
         state.Oynatici.Mute = _saat.KanalSessizMi(state.Kanal);
-        if (oynat) state.Oynatici.Play();
+        Konumlandir(state, yerelSn, oynat);
         eski?.Dispose();
+    }
+
+    private static void Konumlandir(KanalGorunumu state, double yerelSn, bool oynat)
+    {
+        state.Oynatici.Play();
+        state.BekleyenKonumSn = yerelSn;
+        state.BekleyenDuraklat = !oynat;
     }
 
     private void HazirlaSonrakiParca(KanalGorunumu state, double sanalSn)
@@ -617,7 +705,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         if (!sonraki.KayitVar || string.IsNullOrWhiteSpace(sonraki.Dosya)) return;
         double kalan = state.Kanal.SanalZamanHesapla(sonraki.SanalBas, _saat.ElleOfsetAl(state.Kanal.Ad)) - sanalSn;
         if (kalan > 5 || kalan < 0) return;
-        string kaynak = VideoKaynaginiSec(state.Kanal, sonraki.Dosya);
+        string kaynak = VideoKaynaginiSec(state, sonraki.Dosya).dosya;
         if (!File.Exists(kaynak) || string.Equals(kaynak, state.AktifDosya, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(kaynak, state.HazirDosya, StringComparison.OrdinalIgnoreCase)) return;
         state.HazirMedya?.Dispose();
@@ -741,6 +829,7 @@ public partial class CokAciliOynaticiPenceresi : Window
     private void ZamanKaydir()
     {
         _kaydiracSurukleniyor = false;
+        KanalHatalariniTemizle();
         _saat.Ara(ZamanKaydiraci.Value);
         TumKanallariGuncelle(true);
         if (_saat.Oynatiliyor)
@@ -760,7 +849,7 @@ public partial class CokAciliOynaticiPenceresi : Window
 
     private void TranskriptListesi_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_yoklamaGuncelleniyor) return;
+        if (_yoklamaGuncelleniyor || _programatikSecimYapiliyor) return;
         if (TranskriptListesi.SelectedItem is TranskriptSatiri satir)
         {
             if (_duzenlemeAcik && satir.Segment is EfektifSegment ef)
@@ -768,6 +857,7 @@ public partial class CokAciliOynaticiPenceresi : Window
                 DuzenlemeKontrolu.SegmentYukle(ef, _saat.Ders.Ad, _hamTranskript?.KaynakOzet);
             }
 
+            KanalHatalariniTemizle();
             _saat.Ara(satir.Segment.Bas);
             ZamanKaydiraci.Value = Math.Clamp(satir.Segment.Bas, 0, Math.Max(1, _sureSn));
             TumKanallariGuncelle(true);
@@ -776,6 +866,16 @@ public partial class CokAciliOynaticiPenceresi : Window
                 foreach (var state in _kanallar.Values)
                     if (state.GriKutusu.Visibility != Visibility.Visible) state.Oynatici.Play();
             }
+        }
+
+    }
+
+    private void KanalHatalariniTemizle()
+    {
+        foreach (var state in _kanallar.Values)
+        {
+            state.HataVar = false;
+            state.HataDosyasi = null;
         }
     }
 
@@ -857,6 +957,10 @@ public partial class CokAciliOynaticiPenceresi : Window
     {
         var state = _kanallar[kanalAdi];
         double yerelSn = state.Oynatici.Time / 1000.0;
+        if (state.OnizlemeMi)
+        {
+            yerelSn += state.OnizlemeYerelBas;
+        }
         double ekOfset = _saat.ElleOfsetAl(kanalAdi);
 
         // Önizleme videosu oynatılıyorsa asıl parçanın dosyasını eşle
@@ -953,6 +1057,14 @@ public partial class CokAciliOynaticiPenceresi : Window
         public Media? AktifMedya { get; set; }
         public string? AktifDosya { get; set; }
         public string? AktifAsilDosya { get; set; }
+        public bool HataVar { get; set; }
+        public string? HataDosyasi { get; set; }
+        public double? BekleyenKonumSn { get; set; }
+        public bool BekleyenDuraklat { get; set; }
+        public bool OnizlemeMi { get; set; }
+        public double OnizlemeYerelBas { get; set; }
+        public Dictionary<string, (string? Dosya, double YerelBas)> OnizlemeOnbellek { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public Media? HazirMedya { get; set; }
         public string? HazirDosya { get; set; }
     }
