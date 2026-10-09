@@ -907,9 +907,11 @@ public class MetinAramaMotoruTestleri : IDisposable
         Assert.Single(sonuclar);
         Assert.Equal("Yepyeni Guncel Metin Bir", sonuclar[0].Metin);
 
-        // Eski metin ise ezilmiş olmalı
+        // Eski metin ise ezilmiş olmalı ("Eski Metin Bir" sorgusu "Metin Bir" kısmi eşleşmesiyle güncel segmenti döndürür)
         var eskiSonuclar = motor.Ara("Eski Metin Bir");
-        Assert.Empty(eskiSonuclar);
+        Assert.Contains(eskiSonuclar, s => s.Metin == "Yepyeni Guncel Metin Bir");
+        Assert.DoesNotContain(eskiSonuclar, s => s.Metin == "Eski Metin Bir");
+        Assert.Empty(motor.Ara("Eski"));
     }
 
     [Fact]
