@@ -49,6 +49,12 @@ def _metin_norm(metin: str) -> str:
 
 _HALUSINASYON_KALIPLARI = frozenset(_metin_norm(k) for k in {
     "altyazi m k", "altyazi mk", "altyazı m k", "altyazı mk",
+    "altyazilar m k", "altyazılar m k",
+    "altyazi ekleyen ve yorumladigi icin tesekkurler",
+    "altyazı ekleyen ve yorumladığı için teşekkürler",
+    "altyazi ekleyen ve yorumladigi icin",
+    "altyazı ekleyen ve yorumladığı için",
+    "ekleyen ve yorumladigi", "ekleyen ve yorumladığı",
     "abone ol",
     "izlediginiz icin tesekkurler", "izlediğiniz için teşekkürler",
     "izlediginiz icin tesekkur ederim", "izlediğiniz için teşekkür ederim",
@@ -162,13 +168,21 @@ def _guven_birlestir(a: Segment, b: Segment) -> float | None:
     return (a.guven * a_adet + b.guven * b_adet) / (a_adet + b_adet)
 
 
-def _kisa_altyazilari_uzat(segmentler: list[Segment]) -> list[Segment]:
+def _kisa_altyazilari_uzat(
+    segmentler: list[Segment], toplam_sn: float | None = None,
+) -> list[Segment]:
     sonuc = []
     for i, segment in enumerate(segmentler):
         if segment.son - segment.bas <= 0.9:
-            sonraki_bas = segmentler[i + 1].bas if i + 1 < len(segmentler) else segment.bas + 1.0
+            sonraki_bas = (
+                segmentler[i + 1].bas if i + 1 < len(segmentler)
+                else segment.bas + 1.0
+            )
             son = min(segment.bas + 1.0, sonraki_bas)
-            segment = Segment(segment.bas, max(segment.son, son), segment.metin, segment.guven)
+            son = max(segment.son, son)
+            if toplam_sn is not None:
+                son = min(son, toplam_sn)
+            segment = Segment(segment.bas, son, segment.metin, segment.guven)
         sonuc.append(segment)
     return sonuc
 
@@ -223,10 +237,10 @@ def _ikinci_gecis_bolgeleri(
         kalan = butce - harcanan
         if kalan <= 0:
             break
-        sure = min(son - bas, kalan)
-        if sure <= 0:
+        sure = son - bas
+        if sure <= 0 or sure > kalan:
             continue
-        secilen.append((bas, bas + sure))
+        secilen.append((bas, son))
         harcanan += sure
     return secilen
 
@@ -244,6 +258,7 @@ def _adaylari_sec(
     ilk: list[Segment], temiz: list[Segment], ham: list[Segment],
     guven_esik: float = 0.45, guven_kisa_esik: float = 0.30,
     kisa_altyazi_uzat: bool = True,
+    toplam_sn: float | None = None,
 ) -> list[Segment]:
     """Geçerli adaylar içinden güveni en yüksek olanı seç; yakın farkta ilk geçişi koru."""
     adaylar = []
@@ -251,7 +266,7 @@ def _adaylari_sec(
         filtreli = filtrele_halusinasyonlar(aday, guven_esik, guven_kisa_esik)
         if filtreli:
             if kisa_altyazi_uzat:
-                filtreli = _kisa_altyazilari_uzat(filtreli)
+                filtreli = _kisa_altyazilari_uzat(filtreli, toplam_sn)
             adaylar.append((sira, filtreli, _aday_ortalama_guveni(filtreli)))
     if not adaylar:
         return []
@@ -285,8 +300,6 @@ def filtrele_halusinasyonlar(
             continue
         if sure > 3.0 and len(metin) <= 6:
             continue
-        if _metin_norm(metin) in _HALUSINASYON_KALIPLARI:
-            continue
         if _ingilizce_halusinasyonu(metin):
             continue
         kelime_sayisi = len(_metin_norm(metin).split())
@@ -307,7 +320,15 @@ def filtrele_halusinasyonlar(
             j += 1
         sonuc.extend(gecerli[i:i + 1] if j - i >= 3 else gecerli[i:j])
         i = j
-    return sonuc
+    atilacak = set()
+    for bas in range(len(sonuc)):
+        if bas in atilacak:
+            continue
+        for adet in range(1, min(4, len(sonuc) - bas) + 1):
+            metin = " ".join(s.metin for s in sonuc[bas:bas + adet])
+            if _metin_norm(metin) in _HALUSINASYON_KALIPLARI:
+                atilacak.update(range(bas, bas + adet))
+    return [s for i, s in enumerate(sonuc) if i not in atilacak]
 
 
 def bolumleri_kes(whisper_segmentleri_ya_da_sozcukler, ofset: float = 0.0,
@@ -315,7 +336,8 @@ def bolumleri_kes(whisper_segmentleri_ya_da_sozcukler, ofset: float = 0.0,
                   guven_esik: float = 0.45,
                   guven_kisa_esik: float = 0.30,
                   filtrele: bool = True,
-                  kisa_altyazi_uzat: bool = True) -> list[Segment]:
+                  kisa_altyazi_uzat: bool = True,
+                  toplam_sn: float | None = None) -> list[Segment]:
     """Whisper kelime zamanlarından kısa, konuşmaya sıkı bağlı altyazılar üret."""
     sonuc: list[Segment] = []
     for bolum in whisper_segmentleri_ya_da_sozcukler:
@@ -372,7 +394,7 @@ def bolumleri_kes(whisper_segmentleri_ya_da_sozcukler, ofset: float = 0.0,
             i += 1
     if filtrele:
         sirali = filtrele_halusinasyonlar(sirali, guven_esik, guven_kisa_esik)
-        return _kisa_altyazilari_uzat(sirali) if kisa_altyazi_uzat else sirali
+        return _kisa_altyazilari_uzat(sirali, toplam_sn) if kisa_altyazi_uzat else sirali
     return sirali
 
 
@@ -505,6 +527,7 @@ def yaz(
                 guven_kisa_esik=ayar.stt.guven_kisa_esik,
                 filtrele=filtrele,
                 kisa_altyazi_uzat=ayar.stt.kisa_altyazi_uzat,
+                toplam_sn=toplam,
             ))
 
         if toplam <= TEK_PARCA_SINIRI_SN:
@@ -550,6 +573,7 @@ def yaz(
                     temiz_bolumler, ofset=bas, guven_esik=ayar.stt.guven_esik,
                     guven_kisa_esik=ayar.stt.guven_kisa_esik, filtrele=False,
                     kisa_altyazi_uzat=ayar.stt.kisa_altyazi_uzat,
+                    toplam_sn=toplam,
                 )
                 temiz = [
                     Segment(max(bas, s.bas), min(son, s.son), s.metin, s.guven)
@@ -566,6 +590,7 @@ def yaz(
                         ham_bolumler, ofset=bas, guven_esik=ayar.stt.guven_esik,
                         guven_kisa_esik=ayar.stt.guven_kisa_esik, filtrele=False,
                         kisa_altyazi_uzat=ayar.stt.kisa_altyazi_uzat,
+                        toplam_sn=toplam,
                     )
                     ham = [
                         Segment(max(bas, s.bas), min(son, s.son), s.metin, s.guven)
@@ -573,7 +598,7 @@ def yaz(
                     ]
                 secilen = _adaylari_sec(
                     ilk, temiz, ham, ayar.stt.guven_esik, ayar.stt.guven_kisa_esik,
-                    ayar.stt.kisa_altyazi_uzat,
+                    ayar.stt.kisa_altyazi_uzat, toplam,
                 )
                 secilen = [
                     Segment(max(bas, s.bas), min(son, s.son), s.metin, s.guven)
@@ -605,7 +630,10 @@ def yaz(
         cakismasiz = filtrele_halusinasyonlar(
             cakismasiz, ayar.stt.guven_esik, ayar.stt.guven_kisa_esik,
         )
-        return _kisa_altyazilari_uzat(cakismasiz) if ayar.stt.kisa_altyazi_uzat else cakismasiz
+        return (
+            _kisa_altyazilari_uzat(cakismasiz, toplam)
+            if ayar.stt.kisa_altyazi_uzat else cakismasiz
+        )
     finally:
         if coz is not None:
             del coz

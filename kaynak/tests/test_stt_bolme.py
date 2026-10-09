@@ -52,13 +52,26 @@ class SttBolmeTesti(unittest.TestCase):
     def test_bilinen_halisinasyon_filtrelenir(self):
         metinler = [
             "Altyazı M.K.",
+            "Altyazılar M.K.",
             "İzlediğiniz için teşekkür ederim.",
             "İZLEDİĞİNİZ İÇİN TEŞEKKÜRLER",
+            "Altyazı ekleyen ve yorumladığı için teşekkürler",
+            "altyazı ekleyen ve yorumladığı için",
+            "ekleyen ve yorumladığı",
         ]
         self.assertEqual(
             filtrele_halusinasyonlar([Segment(0, 2, metin) for metin in metinler]),
             [],
         )
+
+    def test_parcalara_bolunmus_altyazi_halusinasyonu_atilir(self):
+        sonuc = filtrele_halusinasyonlar([
+            Segment(10, 10.4, "Altyazı"),
+            Segment(10.4, 11.2, "ekleyen ve yorumladığı"),
+            Segment(11.2, 11.8, "için teşekkürler."),
+            Segment(12, 13, "gerçek konuşma"),
+        ])
+        self.assertEqual([s.metin for s in sonuc], ["gerçek konuşma"])
 
     def test_ingilizce_sarki_filtresi_turkce_metinleri_korur(self):
         self.assertEqual(
@@ -144,6 +157,13 @@ class SttBolmeTesti(unittest.TestCase):
         tek = bolumleri_kes([bolum(8, 8.5, words=[kelime(8, 8.5, "çıkar.")])])
         self.assertEqual(tek[0].son, 9.0)
 
+    def test_dosya_sonundaki_kisa_altyazi_toplam_sureyi_asmiyor(self):
+        sonuc = bolumleri_kes(
+            [bolum(8.3, 8.7, words=[kelime(8.3, 8.7, "son.")])],
+            toplam_sn=8.8,
+        )
+        self.assertEqual(sonuc[0].son, 8.8)
+
     def test_ikinci_gecis_bolgesi_guven_butcesi_ve_birlestirme(self):
         segments = [
             Segment(10, 14, "düşük güvenli alan", 0.4),
@@ -153,6 +173,15 @@ class SttBolmeTesti(unittest.TestCase):
         bolgeler = _ikinci_gecis_bolgeleri(segments, 100, 0.6, 0.25)
         self.assertEqual(bolgeler, [(9, 19)])
         self.assertLessEqual(sum(b - a for a, b in bolgeler), 25)
+
+    def test_ikinci_gecis_butceye_sigmayan_bolgeyi_kesmez(self):
+        segments = [
+            Segment(1, 13, "en düşük güven", 0.1),
+            Segment(20, 27, "bütçeye sığan", 0.2),
+        ]
+        bolgeler = _ikinci_gecis_bolgeleri(segments, 100, 0.6, 0.12)
+        self.assertEqual(bolgeler, [(19, 28)])
+        self.assertNotIn((0, 12), bolgeler)
 
     def test_aday_secimi_guven_farki_kucukse_ilk_gecisi_korur(self):
         ilk = [Segment(1, 2, "ilk geçiş", 0.70)]
