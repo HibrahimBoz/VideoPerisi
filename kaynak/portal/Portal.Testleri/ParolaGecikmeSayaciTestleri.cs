@@ -6,6 +6,12 @@ using Xunit;
 public class ParolaGecikmeSayaciTestleri
 {
     [Fact]
+    public void Paylasilan_AyniOrnegiDondurur()
+    {
+        Assert.Same(ParolaGecikmeSayaci.Paylasilan, ParolaGecikmeSayaci.Paylasilan);
+    }
+
+    [Fact]
     public void Sayac_OzelSinirlarlaBaslatilabilir()
     {
         var sayac = new ParolaGecikmeSayaci(azamiHataliDeneme: 3, kilitSuresiSaniye: 15);

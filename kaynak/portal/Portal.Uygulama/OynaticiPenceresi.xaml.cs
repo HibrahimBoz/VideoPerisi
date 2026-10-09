@@ -29,6 +29,7 @@ public partial class OynaticiPenceresi : Window
     private bool _videoVar;
     private bool _tamEkran;
     private bool _kaydiracSurukleniyor;
+    private bool _programatikSecimYapiliyor;
     private double _toplamSureSn;
     private bool _kapatildi;
 
@@ -37,7 +38,7 @@ public partial class OynaticiPenceresi : Window
     private ResizeMode _oncekiResizeMode = ResizeMode.CanResize;
 
     private readonly DispatcherTimer _yoklamaZamanlayici;
-    private readonly ParolaGecikmeSayaci _parolaSayaci = new();
+    private readonly ParolaGecikmeSayaci _parolaSayaci = ParolaGecikmeSayaci.Paylasilan;
     private bool _duzenlemeAcik;
     private bool _oturumParolaDogrulandi;
     private bool _yoklamaGuncelleniyor;
@@ -469,6 +470,7 @@ public partial class OynaticiPenceresi : Window
     /// </summary>
     private void HizSecici_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_oynatici == null) return; // InitializeComponent sırasında ilk seçim olayı erken tetiklenir
         if (HizSecici.SelectedItem is ComboBoxItem item &&
             double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out double hiz))
         {
@@ -535,8 +537,21 @@ public partial class OynaticiPenceresi : Window
 
     private void TranskriptListesi_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_yoklamaGuncelleniyor) return;
+        if (_yoklamaGuncelleniyor || _programatikSecimYapiliyor) return;
         SegmenteAtla();
+    }
+
+    private void ProgramatikSecimYap(TranskriptSatirGorunumu secim)
+    {
+        _programatikSecimYapiliyor = true;
+        try
+        {
+            TranskriptListesi.SelectedItem = secim;
+        }
+        finally
+        {
+            _programatikSecimYapiliyor = false;
+        }
     }
 
     private void TranskriptListesi_KeyDown(object sender, KeyEventArgs e)
@@ -608,7 +623,7 @@ public partial class OynaticiPenceresi : Window
 
         TamEkranDugmesi.Content = "🗗 Pencere";
 
-        // Tam ekranda efektif metinden geçici .srt üretip Media.AddSlave ile ver
+        // Tam ekranda efektif metinden geçici .srt üretip seçili altyazı olarak ekle
         AltyaziyiTamEkranaYukle();
     }
 
@@ -638,27 +653,52 @@ public partial class OynaticiPenceresi : Window
     }
 
     /// <summary>
-    /// Tam ekranda efektif metinden geçici .srt üretip Media.AddSlave ile verir.
+    /// Tam ekranda efektif metinden geçici .srt üretip seçili altyazı olarak ekler.
     /// </summary>
     private void AltyaziyiTamEkranaYukle()
     {
         try
         {
-            if (_oynatici.Medya != null && _efektifSegmentler.Count > 0)
+            if (_oynatici.Medya != null)
             {
-                if (string.IsNullOrEmpty(_geciciSrtYolu) || !File.Exists(_geciciSrtYolu))
+                if (_efektifSegmentler.Count == 0)
                 {
-                    _geciciSrtYolu = SrtUretici.GeciciSrtDosyasiOlustur(_efektifSegmentler);
-                    var srtUri = new Uri(_geciciSrtYolu).AbsoluteUri;
-                    _oynatici.Medya.AddSlave(MediaSlaveType.Subtitle, 1, srtUri);
+                    _oynatici.MediaPlayer.SetSpu(-1);
                 }
+                else
+                {
+                    if (string.IsNullOrEmpty(_geciciSrtYolu) || !File.Exists(_geciciSrtYolu))
+                    {
+                        _geciciSrtYolu = SrtUretici.GeciciSrtDosyasiOlustur(_efektifSegmentler);
+                    }
 
-                _oynatici.MediaPlayer.SetSpu(1);
+                    var srtUri = new Uri(_geciciSrtYolu).AbsoluteUri;
+                    _oynatici.MediaPlayer.AddSlave(MediaSlaveType.Subtitle, srtUri, true);
+                }
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Altyazı ekleme hatası: {ex.Message}");
+        }
+    }
+
+    private void GeciciSrtYolunuSifirla()
+    {
+        string? eskiYol = _geciciSrtYolu;
+        _geciciSrtYolu = null;
+        if (string.IsNullOrEmpty(eskiYol)) return;
+
+        try
+        {
+            if (File.Exists(eskiYol))
+            {
+                File.Delete(eskiYol);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Eski altyazı dosyası silinemedi: {ex.Message}");
         }
     }
 
@@ -769,7 +809,7 @@ public partial class OynaticiPenceresi : Window
         }
         else if (_goruntulenenSegmentler.Count > 0)
         {
-            TranskriptListesi.SelectedItem = _goruntulenenSegmentler[0];
+            ProgramatikSecimYap(_goruntulenenSegmentler[0]);
             DuzenlemeKontrolu.SegmentYukle(_goruntulenenSegmentler[0].Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
         }
     }
@@ -780,11 +820,16 @@ public partial class OynaticiPenceresi : Window
     private void OnDuzenlemeKaydedildi(EfektifSegment seg)
     {
         TranskriptiYukle();
+        if (_tamEkran)
+        {
+            GeciciSrtYolunuSifirla();
+            AltyaziyiTamEkranaYukle();
+        }
 
         var guncel = _goruntulenenSegmentler.FirstOrDefault(s => s.Segment.No == seg.No);
         if (guncel != null)
         {
-            TranskriptListesi.SelectedItem = guncel;
+            ProgramatikSecimYap(guncel);
             DuzenlemeKontrolu.SegmentYukle(guncel.Segment, Kayit.Ad, _hamTranskript?.KaynakOzet);
         }
     }
@@ -844,7 +889,7 @@ public partial class OynaticiPenceresi : Window
                     var guncel = _goruntulenenSegmentler.FirstOrDefault(s => s.Segment.No == seciliNo);
                     if (guncel != null)
                     {
-                        TranskriptListesi.SelectedItem = guncel;
+                        ProgramatikSecimYap(guncel);
                         if (_duzenlemeAcik)
                         {
                             bool taslakVar = DuzenlemeKontrolu.TaslakVarMi;

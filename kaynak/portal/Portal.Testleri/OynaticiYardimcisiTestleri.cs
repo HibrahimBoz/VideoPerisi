@@ -9,19 +9,17 @@ using Xunit;
 public class OynaticiYardimcisiTestleri
 {
     [Fact]
-    public void BaslangicZamaniHesapla_PozitifDeger_IkiSaniyeOnceyiVerir()
+    public void BaslangicZamaniHesapla_PozitifDegeriDegistirmez()
     {
-        // 10 sn'den başlatılırsa 8 sn olmalı
-        Assert.Equal(8.0, OynaticiYardimcisi.BaslangicZamaniHesapla(10.0));
-        // 2.5 sn'den başlatılırsa 0.5 sn olmalı
-        Assert.Equal(0.5, OynaticiYardimcisi.BaslangicZamaniHesapla(2.5));
+        Assert.Equal(10.0, OynaticiYardimcisi.BaslangicZamaniHesapla(10.0));
+        Assert.Equal(2.5, OynaticiYardimcisi.BaslangicZamaniHesapla(2.5));
     }
 
     [Fact]
-    public void BaslangicZamaniHesapla_IkiSaniyeVeyaDahaKucuk_SifirVerir()
+    public void BaslangicZamaniHesapla_SifirVeNegatifleriNormalizeEder()
     {
-        Assert.Equal(0.0, OynaticiYardimcisi.BaslangicZamaniHesapla(2.0));
-        Assert.Equal(0.0, OynaticiYardimcisi.BaslangicZamaniHesapla(1.0));
+        Assert.Equal(2.0, OynaticiYardimcisi.BaslangicZamaniHesapla(2.0));
+        Assert.Equal(1.0, OynaticiYardimcisi.BaslangicZamaniHesapla(1.0));
         Assert.Equal(0.0, OynaticiYardimcisi.BaslangicZamaniHesapla(0.0));
         Assert.Equal(0.0, OynaticiYardimcisi.BaslangicZamaniHesapla(-5.0));
     }
