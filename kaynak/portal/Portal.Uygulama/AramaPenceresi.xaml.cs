@@ -470,8 +470,8 @@ public static class VurguYardimcisi
                 var run = new Run(metin.Substring(duzgunBas, son - duzgunBas))
                 {
                     FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(255, 215, 0)),
-                    Background = new SolidColorBrush(Color.FromArgb(80, 255, 215, 0))
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 180, 50)),
+                    Background = new SolidColorBrush(Color.FromArgb(90, 255, 136, 0))
                 };
                 tb.Inlines.Add(run);
                 mevcut = son;
