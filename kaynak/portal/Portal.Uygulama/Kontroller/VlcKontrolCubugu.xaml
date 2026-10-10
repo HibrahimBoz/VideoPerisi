@@ -88,9 +88,9 @@
                         PreviewMouseLeftButtonDown="AramaKaydiraci_SuruklemeBasladi"
                         PreviewMouseLeftButtonUp="AramaKaydiraci_SuruklemeBitti"
                         MouseMove="AramaKaydiraci_FareHareketi" />
-                <TextBlock x:Name="KalanSure" Grid.Column="2" VerticalAlignment="Center"
+                <TextBlock x:Name="ToplamSure" Grid.Column="2" VerticalAlignment="Center"
                            HorizontalAlignment="Right" Foreground="{DynamicResource SolukMetinFircasi}"
-                           FontSize="11" Text="00:00" />
+                           FontSize="11" Text="--:--" />
             </Grid>
             <DockPanel Grid.Row="1" LastChildFill="True">
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
@@ -115,13 +115,16 @@
                             Click="SesParcasi_Click" />
                     <Button Style="{DynamicResource SimgeDugme}" Content="&#xE7F0;" ToolTip="Altyazı"
                             Click="Altyazi_Click" />
-                    <Button Style="{DynamicResource SimgeDugme}" Content="&#xE713;" ToolTip="En-boy oranı"
+                    <Button Style="{DynamicResource SimgeDugme}" Content="16:9" FontFamily="Segoe UI"
+                            FontSize="12" FontWeight="SemiBold" ToolTip="En-boy oranı"
                             Click="EnBoy_Click" />
-                    <Button Style="{DynamicResource SimgeDugme}" Content="&#xEC4A;" ToolTip="Oynatma hızı"
+                    <Button x:Name="HizDugmesi" Style="{DynamicResource SimgeDugme}" Content="1×" FontFamily="Segoe UI"
+                            FontSize="13" FontWeight="SemiBold" ToolTip="Oynatma hızı"
                             Click="Hiz_Click" />
                     <Button x:Name="DonguDugmesi" Style="{DynamicResource SimgeDugme}" Content="&#xE8EE;" ToolTip="Döngü"
                             Click="Dongu_Click" />
-                    <Button Style="{DynamicResource SimgeDugme}" Content="A-B" ToolTip="A-B tekrarı"
+                    <Button Style="{DynamicResource SimgeDugme}" Content="A-B" FontFamily="Segoe UI"
+                            FontWeight="Bold" ToolTip="A-B tekrarı"
                             Click="AB_Click" />
                     <Button Style="{DynamicResource SimgeDugme}" Content="&#xE722;" ToolTip="Anlık görüntü"
                             Click="AnlikGoruntu_Click" />

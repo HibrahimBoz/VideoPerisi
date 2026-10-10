@@ -151,16 +151,6 @@ public partial class OynaticiPenceresi : Window
             FiltreyiUygula();
             IlkMtimeBelirle(duzeltmeKlasoru);
 
-            // Eğer video süresi henüz bilinmiyorsa son segmentten yaklaşık süre al
-            if (_efektifSegmentler.Count > 0 && _toplamSureSn <= 0)
-            {
-                double sonSn = _efektifSegmentler.Max(s => s.Son);
-                if (sonSn > 0)
-                {
-                    _toplamSureSn = sonSn;
-                    Kontrol.ZamanBilgisiniGuncelle(0, sonSn);
-                }
-            }
         }
         catch (Exception ex)
         {
@@ -253,15 +243,11 @@ public partial class OynaticiPenceresi : Window
                     if (sure > 0)
                     {
                         _toplamSureSn = sure;
-                        _toplamSureSn = sure;
+                        Kontrol.OynaticiBilgisiniGuncelle();
                     }
                 });
             };
 
-            // Oynatmaya başla
-            _oynatici.MediaPlayer.Play();
-
-            // Belirtilen saniyeye atla
             if (baslatmaSn > 0)
             {
                 void OnPlaying(object? s, EventArgs e)
@@ -269,13 +255,24 @@ public partial class OynaticiPenceresi : Window
                     _oynatici.MediaPlayer.Playing -= OnPlaying;
                     Dispatcher.InvokeAsync(() =>
                     {
+                        if (_kapatildi || !_videoVar)
+                        {
+                            return;
+                        }
+
                         _oynatici.Ara(baslatmaSn);
+                        if (!_oynatici.Oynatiliyor)
+                        {
+                            _oynatici.MediaPlayer.Play();
+                        }
+                        Kontrol.OynaticiBilgisiniGuncelle();
                     });
                 }
 
                 _oynatici.MediaPlayer.Playing += OnPlaying;
-                _oynatici.Ara(baslatmaSn);
             }
+
+            _oynatici.MediaPlayer.Play();
         }
         catch (Exception ex)
         {
@@ -334,11 +331,8 @@ public partial class OynaticiPenceresi : Window
         if (_kapatildi) return;
 
         double anlikSn = _videoVar ? _oynatici.Zaman : Kontrol.AramaZamani;
-        double toplamSn = _toplamSureSn > 0
-            ? _toplamSureSn
-            : (_videoVar ? _oynatici.ToplamSure : Kontrol.AramaAzami);
-
-        if (toplamSn > 0 && Math.Abs(Kontrol.AramaAzami - toplamSn) > 0.5)
+        double toplamSn = _videoVar ? _oynatici.ToplamSure : 0;
+        if (toplamSn > 0)
         {
             _toplamSureSn = toplamSn;
         }

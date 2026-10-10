@@ -60,9 +60,28 @@ public partial class VlcKontrolCubugu : UserControl
     private static void OynaticiDegisti(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         VlcKontrolCubugu kontrol = (VlcKontrolCubugu)d;
+        if (e.OldValue is LibVlcOynatici eskiOynatici)
+        {
+            eskiOynatici.MediaPlayer.Playing -= kontrol.OynatmaDurumuDegisti;
+            eskiOynatici.MediaPlayer.Paused -= kontrol.OynatmaDurumuDegisti;
+            eskiOynatici.MediaPlayer.Stopped -= kontrol.OynatmaDurumuDegisti;
+        }
+
+        if (e.NewValue is LibVlcOynatici yeniOynatici)
+        {
+            yeniOynatici.MediaPlayer.Playing += kontrol.OynatmaDurumuDegisti;
+            yeniOynatici.MediaPlayer.Paused += kontrol.OynatmaDurumuDegisti;
+            yeniOynatici.MediaPlayer.Stopped += kontrol.OynatmaDurumuDegisti;
+        }
+
         kontrol._hariciZamanKullaniliyor = false;
         kontrol.Guncelle();
     }
+
+    public void OynaticiBilgisiniGuncelle() => Guncelle();
+
+    private void OynatmaDurumuDegisti(object? sender, EventArgs e) =>
+        Dispatcher.InvokeAsync(Guncelle);
 
     private void KontrolCubugu_Loaded(object sender, RoutedEventArgs e)
     {
@@ -107,7 +126,7 @@ public partial class VlcKontrolCubugu : UserControl
                 }
 
                 GecenSure.Text = SureBiçimle(disZaman);
-                KalanSure.Text = $"{SureBiçimle(Math.Max(0, disToplam - disZaman))} / {SureBiçimle(disToplam)}";
+                ToplamSure.Text = disToplam > 0 ? SureBiçimle(disToplam) : "--:--";
                 return;
             }
 
@@ -116,7 +135,7 @@ public partial class VlcKontrolCubugu : UserControl
                 AramaKaydiraci.Value = 0;
                 AramaKaydiraci.Maximum = 1;
                 GecenSure.Text = "00:00";
-                KalanSure.Text = "00:00 / 00:00";
+                ToplamSure.Text = "--:--";
                 SesKaydiraci.Value = 0;
                 OynatDuraklatDugmesi.Content = "\uE768";
                 return;
@@ -131,16 +150,18 @@ public partial class VlcKontrolCubugu : UserControl
             }
 
             GecenSure.Text = SureBiçimle(zaman);
-            KalanSure.Text = $"-{SureBiçimle(Math.Max(0, toplam - zaman))} / {SureBiçimle(toplam)}";
+            ToplamSure.Text = toplam > 0 ? SureBiçimle(toplam) : "--:--";
             SesKaydiraci.Value = Math.Clamp(oynatici.SesSeviyesi, 0, 100);
             OynatDuraklatDugmesi.Content = oynatici.Oynatiliyor ? "\uE769" : "\uE768";
+            OynatDuraklatDugmesi.ToolTip = oynatici.Oynatiliyor ? "Duraklat" : "Oynat";
+            HizDugmesi.Content = $"{oynatici.Hiz:0.##}×";
             SesDugmesi.Content = oynatici.Sessiz || oynatici.SesSeviyesi == 0 ? "\uE74F" : "\uE767";
             SesDugmesi.ToolTip = oynatici.Sessiz ? "Sesi aç" : "Sessiz";
         }
         catch
         {
             GecenSure.Text = "00:00";
-            KalanSure.Text = "00:00 / 00:00";
+            ToplamSure.Text = "--:--";
         }
         finally
         {
@@ -345,7 +366,7 @@ public partial class VlcKontrolCubugu : UserControl
         {
             menu.Items.Add(new MenuItem
             {
-                Header = $"{hiz:0.##}x",
+                Header = $"{hiz:0.##}×",
                 IsCheckable = true,
                 IsChecked = Math.Abs((Oynatici?.Hiz ?? 1) - hiz) < 0.001,
                 Command = new RelayCommand(() => { if (Oynatici is { } o) o.Hiz = hiz; })
