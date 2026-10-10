@@ -10,6 +10,7 @@ import os
 import re
 import unicodedata
 import wave
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -58,10 +59,35 @@ _HALUSINASYON_KALIPLARI = frozenset(_metin_norm(k) for k in {
     "altyazı ekleyen ve yorumladığı için",
     "ekleyen ve yorumladigi", "ekleyen ve yorumladığı",
     "abone ol",
+    "kanala abone ol",
+    "abone olmayi unutmayin", "abone olmayı unutmayın",
+    "abone olmayi unutmayiniz", "abone olmayı unutmayınız",
+    "olmayi unutmayin", "olmayı unutmayın",
+    "olmayi unutmayiniz", "olmayı unutmayınız",
+    "videoyu begenmeyi unutmayin", "videoyu beğenmeyi unutmayın",
+    "begenmeyi unutmayin", "beğenmeyi unutmayın",
+    "sosyal muzigi", "sosyal müziği",
     "izlediginiz icin tesekkurler", "izlediğiniz için teşekkürler",
     "izlediginiz icin tesekkur ederim", "izlediğiniz için teşekkür ederim",
     "bir sonraki videoda gorusmek uzere", "bir sonraki videoda görüşmek üzere",
 })
+
+_TEKRAR_KARAKTER_DESENI = re.compile(r"(.)\1{5,}")
+
+
+def _tekrar_karakter_mi(metin: str) -> bool:
+    return bool(_TEKRAR_KARAKTER_DESENI.search(metin))
+
+
+def _tamami_buyuk_harf_mi(metin: str) -> bool:
+    kelimeler = metin.split()
+    if len(kelimeler) < 2:
+        return False
+    harfler = [c for c in metin if c.isalpha()]
+    if len(harfler) < 10:
+        return False
+    return all(c.isupper() for c in harfler)
+
 
 _MUZIK_SIMGE_DESENI = re.compile(r"^[🎵♪♫🎶♩♬\s\(\)\[\]\.,!?:;\-_]+$")
 _MUZIK_ETIKETLERI = frozenset(_metin_norm(k) for k in {
@@ -308,6 +334,10 @@ def filtrele_halusinasyonlar(
             continue
         if sure > 3.0 and len(metin) <= 6:
             continue
+        if _tekrar_karakter_mi(metin):
+            continue
+        if _tamami_buyuk_harf_mi(metin):
+            continue
         if _ingilizce_halusinasyonu(metin):
             continue
         kelime_sayisi = len(_metin_norm(metin).split())
@@ -336,7 +366,13 @@ def filtrele_halusinasyonlar(
             metin = " ".join(s.metin for s in sonuc[bas:bas + adet])
             if _metin_norm(metin) in _HALUSINASYON_KALIPLARI:
                 atilacak.update(range(bas, bas + adet))
-    return [s for i, s in enumerate(sonuc) if i not in atilacak]
+    sonuc = [s for i, s in enumerate(sonuc) if i not in atilacak]
+    norm_metinler = [_metin_norm(s.metin) for s in sonuc]
+    sayac = Counter(norm_metinler)
+    return [
+        s for s, norm in zip(sonuc, norm_metinler)
+        if not (norm and sayac[norm] >= 3 and len(norm.split()) <= 4)
+    ]
 
 
 def bolumleri_kes(whisper_segmentleri_ya_da_sozcukler, ofset: float = 0.0,
@@ -587,8 +623,10 @@ def bosluk_ek_filtrele(
 ) -> list[Segment]:
     """Boşluk doldurma adayları için ek filtreler:
     (a) yalnız müzik simgesi/etiketi veya halüsinasyon kalıbı içeren metinleri at,
-    (b) ortalama kelime olasılığı < guven_esik (0.40) olanları at,
-    (c) aynı metnin 2'den fazla ardışık tekrarını (döngü) at.
+    (b) bir karakterin >=6 tekrarını içeren veya tamamı büyük harf metinleri at,
+    (c) ortalama kelime olasılığı < guven_esik (0.40) olanları at,
+    (d) aynı metnin 2'den fazla ardışık tekrarını (döngü) at,
+    (e) aynı normalize metin >= 3 kez geçiyorsa ve <= 4 kelime ise tüm tekrarlarını at.
     """
     gecerli = []
     for s in segmentler:
@@ -596,6 +634,10 @@ def bosluk_ek_filtrele(
         if sure <= 0:
             continue
         if _bosluk_muzik_veya_gurultu_mu(s.metin):
+            continue
+        if _tekrar_karakter_mi(s.metin):
+            continue
+        if _tamami_buyuk_harf_mi(s.metin):
             continue
         if s.guven is not None and s.guven < guven_esik:
             continue
@@ -615,7 +657,13 @@ def bosluk_ek_filtrele(
         if tekrar_sayisi <= 2:
             sonuc.extend(gecerli[i:j])
         i = j
-    return sonuc
+
+    norm_metinler = [_metin_norm(s.metin) for s in sonuc]
+    sayac = Counter(norm_metinler)
+    return [
+        s for s, norm in zip(sonuc, norm_metinler)
+        if not (norm and sayac[norm] >= 3 and len(norm.split()) <= 4)
+    ]
 
 
 def cakisma_ayikla(mevcut: list[Segment], yeni: list[Segment]) -> list[Segment]:

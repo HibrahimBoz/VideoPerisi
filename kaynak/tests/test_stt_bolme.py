@@ -310,8 +310,102 @@ class SttBolmeTesti(unittest.TestCase):
         self.assertTrue(ayar.stt.bosluk_doldur)
         self.assertEqual(ayar.stt.bosluk_min_sn, 30.0)
         self.assertEqual(ayar.stt.bosluk_aktif_orani, 0.40)
-        self.assertEqual(ayar.stt.bosluk_enerji_db, 8.0)
+        self.assertEqual(ayar.stt.bosluk_enerji_db, 3.0)
         self.assertEqual(ayar.stt.bosluk_en_cok_oran, 1.0)
+
+    def test_karakter_tekrari_halusinasyonu_atlanir(self):
+        adaylar = [
+            Segment(0.0, 2.0, "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"),
+            Segment(2.0, 4.0, "ÖÖÖÖÖÖ ÖL AKŞIDIR!!"),
+            Segment(4.0, 6.0, "aaaaaa konuşma"),
+            Segment(6.0, 8.0, "saat iki yönünde"),
+        ]
+        sonuc = filtrele_halusinasyonlar(adaylar)
+        self.assertEqual([s.metin for s in sonuc], ["saat iki yönünde"])
+        sonuc_bosluk = bosluk_ek_filtrele(adaylar)
+        self.assertEqual([s.metin for s in sonuc_bosluk], ["saat iki yönünde"])
+
+    def test_buyuk_harfli_uydurma_cumle_atlanir(self):
+        uydurmalar = [
+            Segment(0.0, 3.0, "HAKEM GELSEN İÇERE, PİSLE BAKMASIN GEREĞE..."),
+            Segment(3.0, 6.0, "GİDAR SİKORUYORLAR SEVELİ KOPUTLAR SORMUYOR"),
+            Segment(6.0, 9.0, "KERAL VE HİCA 'LA CEVAP VERDİ"),
+            Segment(9.0, 12.0, "HEMET ÇEVİRİM SİROGÜ ÜZÜNÜ DETİK İÇİN KOPUTLARIM"),
+            Segment(12.0, 15.0, "SOSYAL MÜZİĞİ"),
+            Segment(15.0, 18.0, "Gerçek Türkçe cümle burada devam ediyor."),
+        ]
+        sonuc = filtrele_halusinasyonlar(uydurmalar)
+        self.assertEqual([s.metin for s in sonuc], ["Gerçek Türkçe cümle burada devam ediyor."])
+        sonuc_bosluk = bosluk_ek_filtrele(uydurmalar)
+        self.assertEqual([s.metin for s in sonuc_bosluk], ["Gerçek Türkçe cümle burada devam ediyor."])
+
+    def test_kisa_buyuk_harfli_teknik_satirlar_korunur(self):
+        teknik = [
+            Segment(0.0, 2.0, "ECM"),
+            Segment(2.0, 4.0, "RADAR"),
+            Segment(4.0, 6.0, "ÖN HAT"),
+            Segment(6.0, 8.0, "SES TEST"),
+        ]
+        sonuc = filtrele_halusinasyonlar(teknik)
+        self.assertEqual([s.metin for s in sonuc], ["ECM", "RADAR", "ÖN HAT", "SES TEST"])
+        sonuc_bosluk = bosluk_ek_filtrele(teknik)
+        self.assertEqual([s.metin for s in sonuc_bosluk], ["ECM", "RADAR", "ÖN HAT", "SES TEST"])
+
+    def test_abone_olmayi_unutmayin_varyantlari_atlanir(self):
+        kalip_adaylari = [
+            Segment(0.0, 2.0, "ABONE OLMAYI UNUTMAYINIZ"),
+            Segment(2.0, 4.0, "ABONE OLMAYI UNUTMAYIN!"),
+            Segment(4.0, 6.0, "OLMAYI UNUTMAYINIZ!"),
+            Segment(6.0, 8.0, "abone olmayı unutmayın"),
+            Segment(8.0, 10.0, "kanala abone ol"),
+            Segment(10.0, 12.0, "videoyu beğenmeyi unutmayın"),
+            Segment(12.0, 14.0, "beğenmeyi unutmayın"),
+            Segment(14.0, 16.0, "videoyu begenmeyi unutmayin"),
+            Segment(16.0, 18.0, "begenmeyi unutmayin"),
+            Segment(18.0, 20.0, "sosyal müziği"),
+            Segment(20.0, 22.0, "altyazı m k"),
+            Segment(22.0, 24.0, "izlediğiniz için teşekkürler"),
+            Segment(24.0, 26.0, "Burada okul gösterisi devam ediyor."),
+        ]
+        sonuc = filtrele_halusinasyonlar(kalip_adaylari)
+        self.assertEqual([s.metin for s in sonuc], ["Burada okul gösterisi devam ediyor."])
+        sonuc_bosluk = bosluk_ek_filtrele(kalip_adaylari)
+        self.assertEqual([s.metin for s in sonuc_bosluk], ["Burada okul gösterisi devam ediyor."])
+
+    def test_uc_kez_tekrar_eden_kisa_metin_tumden_atlanir(self):
+        uzun_cumle = "Bu cümle beş kelimeden daha uzun bir cümledir."
+        segmentler = [
+            Segment(0.0, 2.0, "kısa metin"),
+            Segment(5.0, 7.0, uzun_cumle),
+            Segment(10.0, 12.0, "farklı bir cümle"),
+            Segment(15.0, 17.0, "kısa metin"),
+            Segment(20.0, 22.0, uzun_cumle),
+            Segment(25.0, 27.0, "bir başka normal cümle"),
+            Segment(30.0, 32.0, "kısa metin"),
+            Segment(35.0, 37.0, uzun_cumle),
+        ]
+        sonuc = filtrele_halusinasyonlar(segmentler)
+        self.assertEqual(
+            [s.metin for s in sonuc],
+            [uzun_cumle, "farklı bir cümle", uzun_cumle, "bir başka normal cümle", uzun_cumle],
+        )
+
+        sonuc_bosluk = bosluk_ek_filtrele(segmentler)
+        self.assertEqual(
+            [s.metin for s in sonuc_bosluk],
+            [uzun_cumle, "farklı bir cümle", uzun_cumle, "bir başka normal cümle", uzun_cumle],
+        )
+
+    def test_normal_turkce_cumleler_korunur(self):
+        cumleler = [
+            Segment(0.0, 3.0, "Bugün okulumuzda harika bir gösteri izledik."),
+            Segment(4.0, 7.0, "Öğrenciler sahnede çok başarılı bir performans sergiledi."),
+            Segment(8.0, 10.0, "Tebrikler çocuklar!"),
+        ]
+        sonuc = filtrele_halusinasyonlar(cumleler)
+        self.assertEqual([s.metin for s in sonuc], [s.metin for s in cumleler])
+        sonuc_bosluk = bosluk_ek_filtrele(cumleler)
+        self.assertEqual([s.metin for s in sonuc_bosluk], [s.metin for s in cumleler])
 
 
 if __name__ == "__main__":
