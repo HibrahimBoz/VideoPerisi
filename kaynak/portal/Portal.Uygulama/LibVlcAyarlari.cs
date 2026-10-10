@@ -26,6 +26,21 @@ public static class LibVlcAyarlari
         }
     }
 
+    private static readonly Lazy<LibVLC> _paylasilan = new(Olustur, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>Uygulama genelinde tek LibVLC örneği (pencere açılışında 260 ms'lik kurulum maliyetini ödemez).</summary>
+    public static LibVLC Paylasilan => _paylasilan.Value;
+
+    /// <summary>LibVLC'yi arka planda önceden kurar; ilk oynatıcı penceresi anında açılır.</summary>
+    public static void OnIsit()
+    {
+        _ = Task.Run(() =>
+        {
+            try { _ = _paylasilan.Value; }
+            catch { /* ilk gerçek kullanımda hata yeniden fırlatılır */ }
+        });
+    }
+
     public static string[] SecenekleriBirlestir(IEnumerable<string>? ek) => VlcSecenekleri.Birlestir(ek);
 
     private static IEnumerable<string>? AyarDosyasindanOku()

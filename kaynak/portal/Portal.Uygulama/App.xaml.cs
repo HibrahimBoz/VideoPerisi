@@ -28,6 +28,7 @@ public partial class App : Application
         try
         {
             Core.Initialize();
+            LibVlcAyarlari.OnIsit();
         }
         catch (Exception ex)
         {

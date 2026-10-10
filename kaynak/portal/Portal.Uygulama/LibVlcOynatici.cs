@@ -41,8 +41,8 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
     {
         if (libVlc == null)
         {
-            LibVlc = LibVlcAyarlari.Olustur();
-            _kendiLibVlc = true;
+            LibVlc = LibVlcAyarlari.Paylasilan;
+            _kendiLibVlc = false;
         }
         else
         {
