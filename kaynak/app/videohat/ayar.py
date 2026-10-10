@@ -26,6 +26,11 @@ class SttAyar:
     ikinci_gecis_en_cok_oran: float = 0.25
     parca_siniri_tekrar_temizle: bool = True
     kisa_altyazi_uzat: bool = True
+    bosluk_doldur: bool = True
+    bosluk_min_sn: float = 30.0
+    bosluk_aktif_orani: float = 0.40
+    bosluk_enerji_db: float = 3.0
+    bosluk_en_cok_oran: float = 1.0
 
 
 @dataclass

@@ -10,8 +10,11 @@ import os
 import re
 import unicodedata
 import wave
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import numpy as np
 
 from . import yollar
 from .ayar import Ayar
@@ -56,10 +59,41 @@ _HALUSINASYON_KALIPLARI = frozenset(_metin_norm(k) for k in {
     "altyazı ekleyen ve yorumladığı için",
     "ekleyen ve yorumladigi", "ekleyen ve yorumladığı",
     "abone ol",
+    "kanala abone ol",
+    "abone olmayi unutmayin", "abone olmayı unutmayın",
+    "abone olmayi unutmayiniz", "abone olmayı unutmayınız",
+    "olmayi unutmayin", "olmayı unutmayın",
+    "olmayi unutmayiniz", "olmayı unutmayınız",
+    "videoyu begenmeyi unutmayin", "videoyu beğenmeyi unutmayın",
+    "begenmeyi unutmayin", "beğenmeyi unutmayın",
+    "sosyal muzigi", "sosyal müziği",
     "izlediginiz icin tesekkurler", "izlediğiniz için teşekkürler",
     "izlediginiz icin tesekkur ederim", "izlediğiniz için teşekkür ederim",
     "bir sonraki videoda gorusmek uzere", "bir sonraki videoda görüşmek üzere",
 })
+
+_TEKRAR_KARAKTER_DESENI = re.compile(r"(.)\1{5,}")
+
+
+def _tekrar_karakter_mi(metin: str) -> bool:
+    return bool(_TEKRAR_KARAKTER_DESENI.search(metin))
+
+
+def _tamami_buyuk_harf_mi(metin: str) -> bool:
+    kelimeler = metin.split()
+    if len(kelimeler) < 2:
+        return False
+    harfler = [c for c in metin if c.isalpha()]
+    if len(harfler) < 10:
+        return False
+    return all(c.isupper() for c in harfler)
+
+
+_MUZIK_SIMGE_DESENI = re.compile(r"^[🎵♪♫🎶♩♬\s\(\)\[\]\.,!?:;\-_]+$")
+_MUZIK_ETIKETLERI = frozenset(_metin_norm(k) for k in {
+    "muzik", "müzik", "alkis", "alkış", "bye bye",
+})
+_BOSLUK_ATILACAK_KALIPLAR = frozenset(_HALUSINASYON_KALIPLARI | _MUZIK_ETIKETLERI)
 
 _INGILIZCE_SIK_KELIMELER = frozenset({
     "the", "you", "me", "let", "see", "and", "to", "of", "in", "is",
@@ -300,6 +334,10 @@ def filtrele_halusinasyonlar(
             continue
         if sure > 3.0 and len(metin) <= 6:
             continue
+        if _tekrar_karakter_mi(metin):
+            continue
+        if _tamami_buyuk_harf_mi(metin):
+            continue
         if _ingilizce_halusinasyonu(metin):
             continue
         kelime_sayisi = len(_metin_norm(metin).split())
@@ -328,7 +366,13 @@ def filtrele_halusinasyonlar(
             metin = " ".join(s.metin for s in sonuc[bas:bas + adet])
             if _metin_norm(metin) in _HALUSINASYON_KALIPLARI:
                 atilacak.update(range(bas, bas + adet))
-    return [s for i, s in enumerate(sonuc) if i not in atilacak]
+    sonuc = [s for i, s in enumerate(sonuc) if i not in atilacak]
+    norm_metinler = [_metin_norm(s.metin) for s in sonuc]
+    sayac = Counter(norm_metinler)
+    return [
+        s for s, norm in zip(sonuc, norm_metinler)
+        if not (norm and sayac[norm] >= 3 and len(norm.split()) <= 4)
+    ]
 
 
 def bolumleri_kes(whisper_segmentleri_ya_da_sozcukler, ofset: float = 0.0,
@@ -450,12 +494,199 @@ def _istem_yap(onceki_metin: str, terimler: str) -> str | None:
 
 
 def _wav_parca(wav16: Path, bas: float, son: float, sr: int):
-    import numpy as np
     with wave.open(str(wav16), "rb") as w:
         w.setpos(int(bas * sr))
         return np.frombuffer(
             w.readframes(max(0, int((son - bas) * sr))), dtype=np.int16,
         ).astype(np.float32) / 32768.0
+
+
+def _bosluk_muzik_veya_gurultu_mu(metin: str) -> bool:
+    temiz = metin.strip()
+    if not temiz:
+        return True
+    if _MUZIK_SIMGE_DESENI.match(temiz):
+        return True
+    harfler = re.sub(r"[🎵♪♫🎶♩♬]+", " ", temiz).strip()
+    norm = _metin_norm(harfler)
+    return not norm or norm in _BOSLUK_ATILACAK_KALIPLAR
+
+
+def ses_enerji_dbfs(wav16: Path | str) -> np.ndarray:
+    """WAV16 dosyasından 1 sn'lik pencerelerle RMS dBFS dizisi üretir.
+    Bellek kayıt süresinden bağımsız kalması için wave modülüyle parça parça okunur.
+    """
+    wav_yolu = Path(wav16)
+    dbfs_list = []
+    with wave.open(str(wav_yolu), "rb") as w:
+        sr = w.getframerate()
+        while True:
+            frames = w.readframes(sr)
+            if not frames:
+                break
+            samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+            if samples.size == 0:
+                break
+            rms = float(np.sqrt(np.mean(samples ** 2)))
+            db = 20.0 * np.log10(rms) if rms > 1e-7 else -100.0
+            dbfs_list.append(db)
+    return np.array(dbfs_list, dtype=np.float32)
+
+
+def enerji_aktif(rms_dbfs: np.ndarray, bosluk_enerji_db: float = 8.0) -> np.ndarray:
+    """RMS dBFS dizisinden aktif saniyeleri belirler.
+    Gürültü tabanı = alt %10 yüzdeliği.
+    Aktif saniye = RMS >= taban + bosluk_enerji_db VE RMS > -55 dBFS.
+    """
+    rms_arr = np.asarray(rms_dbfs, dtype=np.float32)
+    if rms_arr.size == 0:
+        return np.zeros(0, dtype=bool)
+    taban = float(np.percentile(rms_arr, 10))
+    return (rms_arr >= (taban + bosluk_enerji_db)) & (rms_arr > -55.0)
+
+
+def bosluk_butcesi_sec(
+    bosluklar: list[tuple[float, float]],
+    toplam_sn: float,
+    en_cok_oran: float = 1.0,
+) -> list[tuple[float, float]]:
+    """Toplam süreye göre bütçeyi uygular. En uzun boşluklar önce seçilir."""
+    butce = max(0.0, toplam_sn * min(1.0, max(0.0, en_cok_oran)))
+    sirali = sorted(bosluklar, key=lambda b: (-(b[1] - b[0]), b[0]))
+    secilen = []
+    harcanan = 0.0
+    for bas, son in sirali:
+        sure = son - bas
+        if sure <= 0:
+            continue
+        kalan = butce - harcanan
+        if sure <= kalan:
+            secilen.append((bas, son))
+            harcanan += sure
+    secilen.sort(key=lambda b: b[0])
+    return secilen
+
+
+def bosluk_bul(
+    segmentler: list[Segment],
+    aktif: np.ndarray,
+    toplam_sn: float | None = None,
+    bosluk_min_sn: float = 30.0,
+    bosluk_aktif_orani: float = 0.40,
+    en_cok_oran: float = 1.0,
+) -> list[tuple[float, float]]:
+    """Ardışık altyazılar arası (ve dosya başı/sonu) boşluk >= bosluk_min_sn
+    olan ve boşluk içindeki aktif saniye oranı >= bosluk_aktif_orani olan aralıkları bulur.
+    Bütçe kısıtı en uzun boşluklara öncelik verir.
+    """
+    aktif_arr = np.asarray(aktif, dtype=bool)
+    if toplam_sn is None:
+        toplam_sn = float(len(aktif_arr))
+    if toplam_sn <= 0:
+        return []
+
+    sirali = sorted(segmentler, key=lambda s: (s.bas, s.son))
+    adaylar: list[tuple[float, float]] = []
+
+    if sirali:
+        if sirali[0].bas >= bosluk_min_sn:
+            adaylar.append((0.0, sirali[0].bas))
+        en_son = sirali[0].son
+        for s in sirali[1:]:
+            if s.bas - en_son >= bosluk_min_sn:
+                adaylar.append((en_son, s.bas))
+            if s.son > en_son:
+                en_son = s.son
+        if toplam_sn - en_son >= bosluk_min_sn:
+            adaylar.append((en_son, toplam_sn))
+    else:
+        if toplam_sn >= bosluk_min_sn:
+            adaylar.append((0.0, toplam_sn))
+
+    gecerli: list[tuple[float, float]] = []
+    for bas, son in adaylar:
+        sure = son - bas
+        if sure < bosluk_min_sn:
+            continue
+        i_bas = max(0, int(round(bas)))
+        i_son = min(len(aktif_arr), int(round(son)))
+        dilim = aktif_arr[i_bas:i_son] if i_son > i_bas else np.empty(0, dtype=bool)
+        oran = float(np.mean(dilim)) if dilim.size > 0 else 0.0
+        if oran >= bosluk_aktif_orani:
+            gecerli.append((bas, son))
+
+    return bosluk_butcesi_sec(gecerli, toplam_sn, en_cok_oran)
+
+
+def bosluk_ek_filtrele(
+    segmentler: list[Segment], guven_esik: float = 0.40,
+) -> list[Segment]:
+    """Boşluk doldurma adayları için ek filtreler:
+    (a) yalnız müzik simgesi/etiketi veya halüsinasyon kalıbı içeren metinleri at,
+    (b) bir karakterin >=6 tekrarını içeren veya tamamı büyük harf metinleri at,
+    (c) ortalama kelime olasılığı < guven_esik (0.40) olanları at,
+    (d) aynı metnin 2'den fazla ardışık tekrarını (döngü) at,
+    (e) aynı normalize metin >= 3 kez geçiyorsa ve <= 4 kelime ise tüm tekrarlarını at.
+    """
+    gecerli = []
+    for s in segmentler:
+        sure = s.son - s.bas
+        if sure <= 0:
+            continue
+        if _bosluk_muzik_veya_gurultu_mu(s.metin):
+            continue
+        if _tekrar_karakter_mi(s.metin):
+            continue
+        if _tamami_buyuk_harf_mi(s.metin):
+            continue
+        if s.guven is not None and s.guven < guven_esik:
+            continue
+        gecerli.append(s)
+
+    sonuc = []
+    i = 0
+    while i < len(gecerli):
+        j = i + 1
+        norm_i = _metin_norm(re.sub(r"[🎵♪♫🎶♩♬]+", " ", gecerli[i].metin))
+        while j < len(gecerli):
+            norm_j = _metin_norm(re.sub(r"[🎵♪♫🎶♩♬]+", " ", gecerli[j].metin))
+            if norm_j != norm_i:
+                break
+            j += 1
+        tekrar_sayisi = j - i
+        if tekrar_sayisi <= 2:
+            sonuc.extend(gecerli[i:j])
+        i = j
+
+    norm_metinler = [_metin_norm(s.metin) for s in sonuc]
+    sayac = Counter(norm_metinler)
+    return [
+        s for s, norm in zip(sonuc, norm_metinler)
+        if not (norm and sayac[norm] >= 3 and len(norm.split()) <= 4)
+    ]
+
+
+def cakisma_ayikla(mevcut: list[Segment], yeni: list[Segment]) -> list[Segment]:
+    """Mevcut altyazılarla zaman çakışan yeni adayları at (mevcut korunur).
+    Kalanları mevcut listeye ekle ve başa göre sırala (çakışma olmasın).
+    """
+    kalan_yeni = []
+    for y in yeni:
+        if not any(y.bas < m.son and y.son > m.bas for m in mevcut):
+            kalan_yeni.append(y)
+
+    sirali_yeni = sorted(kalan_yeni, key=lambda s: (s.bas, s.son))
+    temiz_yeni = []
+    en_son = -1.0
+    for y in sirali_yeni:
+        if y.bas >= en_son:
+            temiz_yeni.append(y)
+            en_son = y.son
+
+    birlesmis = list(mevcut) + temiz_yeni
+    birlesmis.sort(key=lambda s: (s.bas, s.son))
+    return birlesmis
+
 
 
 def yaz(
@@ -554,6 +785,70 @@ def yaz(
                     )[-220:]
                     del x
                     log.info("Parça %d/%d bitti (%d-%d dk)", i, len(parcalar), a // 60, b // 60)
+
+        sonuc = filtrele_halusinasyonlar(
+            sonuc, ayar.stt.guven_esik, ayar.stt.guven_kisa_esik,
+        )
+
+        if ayar.stt.bosluk_doldur:
+            rms_dbfs = ses_enerji_dbfs(wav16)
+            aktif = enerji_aktif(rms_dbfs, ayar.stt.bosluk_enerji_db)
+            aday_bosluklar = bosluk_bul(
+                sonuc,
+                aktif,
+                toplam_sn=toplam,
+                bosluk_min_sn=ayar.stt.bosluk_min_sn,
+                bosluk_aktif_orani=ayar.stt.bosluk_aktif_orani,
+                en_cok_oran=ayar.stt.bosluk_en_cok_oran,
+            )
+            toplam_bosluk_sn = sum(b - a for a, b in aday_bosluklar)
+            toplam_aktif_sn = 0.0
+            for bas, son in aday_bosluklar:
+                i_bas = max(0, int(round(bas)))
+                i_son = min(len(aktif), int(round(son)))
+                toplam_aktif_sn += float(np.sum(aktif[i_bas:i_son]))
+            aktif_yuzde = (toplam_aktif_sn / toplam_bosluk_sn * 100) if toplam_bosluk_sn > 0 else 0.0
+
+            yeni_adaylar: list[Segment] = []
+            for g_bas, g_son in aday_bosluklar:
+                ses_bas = max(0.0, g_bas - 1.0)
+                ses_son = min(toplam, g_son + 1.0)
+                cur = ses_bas
+                while cur < ses_son:
+                    nxt = min(cur + 300.0, ses_son)
+                    dilim_ses = _wav_parca(wav16, cur, nxt, sr)
+                    dilim_bolumler, _ = model.transcribe(
+                        dilim_ses,
+                        language="tr",
+                        beam_size=ayar.stt.beam_size,
+                        vad_filter=False,
+                        word_timestamps=True,
+                        hallucination_silence_threshold=2.0,
+                        no_speech_threshold=0.6,
+                        condition_on_previous_text=False,
+                        hotwords=terimler or None,
+                    )
+                    dilim_segmentler = bolumleri_kes(
+                        dilim_bolumler,
+                        ofset=cur,
+                        guven_esik=ayar.stt.guven_esik,
+                        guven_kisa_esik=ayar.stt.guven_kisa_esik,
+                        filtrele=True,
+                        kisa_altyazi_uzat=ayar.stt.kisa_altyazi_uzat,
+                        toplam_sn=toplam,
+                    )
+                    filtrelenmis = bosluk_ek_filtrele(dilim_segmentler, guven_esik=0.40)
+                    yeni_adaylar.extend(filtrelenmis)
+                    del dilim_ses
+                    cur = nxt
+
+            eski_sayi = len(sonuc)
+            sonuc = cakisma_ayikla(sonuc, yeni_adaylar)
+            eklenen = len(sonuc) - eski_sayi
+            log.info(
+                "Bosluk doldurma: %d bosluk (toplam %.1f sn, aktif %%%d) -> %d altyazi eklendi",
+                len(aday_bosluklar), toplam_bosluk_sn, round(aktif_yuzde), eklenen,
+            )
 
         if ikinci_gecis:
             # Temiz ve ham kaynakların her biri yeniden çözüldüğünden ortak süre bütçesi bölünür.
