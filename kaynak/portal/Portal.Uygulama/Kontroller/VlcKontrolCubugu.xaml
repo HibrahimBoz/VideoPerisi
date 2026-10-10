@@ -125,7 +125,7 @@
                             Click="AB_Click" />
                     <Button Style="{DynamicResource SimgeDugme}" Content="&#xE722;" ToolTip="Anlık görüntü"
                             Click="AnlikGoruntu_Click" />
-                    <Button Style="{DynamicResource SimgeDugme}" Content="&#xE740;" ToolTip="Tam ekran"
+                    <Button x:Name="TamEkranDugmesi" Style="{DynamicResource SimgeDugme}" Content="&#xE740;" ToolTip="Tam ekran"
                             Click="TamEkran_Click" />
                 </WrapPanel>
             </DockPanel>

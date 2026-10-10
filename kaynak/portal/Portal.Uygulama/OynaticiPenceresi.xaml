@@ -3,12 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         xmlns:local="clr-namespace:Portal.Uygulama"
+        xmlns:kontroller="clr-namespace:Portal.Uygulama.Kontroller"
         Style="{StaticResource PortalPencere}"
         Title="Oynatıcı" Width="1100" Height="700"
         MinWidth="800" MinHeight="500"
         KeyDown="Window_KeyDown"
         Closing="Window_Closing">
-    <Grid Margin="10">
+    <Grid Margin="10" PreviewMouseMove="Pencere_PreviewMouseMove">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="320"/>
             <ColumnDefinition Width="6"/>
@@ -23,7 +24,9 @@
             </Grid.RowDefinitions>
 
             <!-- Video Alanı -->
-            <Grid Grid.Row="0" Background="#101114" ClipToBounds="True">
+            <Grid Grid.Row="0" Background="#101114" ClipToBounds="True"
+                  PreviewMouseLeftButtonUp="VideoAlani_MouseLeftButtonUp"
+                  PreviewMouseWheel="VideoAlani_MouseWheel">
                 <vlc:VideoView x:Name="VideoGosterici" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
 
                 <!-- Video Yok / Hata Uyarısı -->
@@ -37,60 +40,7 @@
                 </Border>
             </Grid>
 
-            <!-- Kontrol Çubuğu -->
-            <Border Grid.Row="1" Background="{DynamicResource YuzeyFircasi}"
-                    BorderBrush="{DynamicResource KenarlikFircasi}" BorderThickness="1"
-                    Padding="10,8" Margin="0,6,0,0" CornerRadius="6">
-                <StackPanel>
-                    <!-- İlerleme Çubuğu ve Zaman Göstergesi -->
-                    <DockPanel Margin="0,0,0,8">
-                        <TextBlock x:Name="ZamanMetni" DockPanel.Dock="Right" Text="0:00 / 0:00"
-                                   VerticalAlignment="Center" Margin="10,0,0,0"
-                                   FontFamily="Consolas, monospace" FontSize="13" Foreground="{DynamicResource SolukMetinFircasi}"/>
-                        <Slider x:Name="ZamanKaydiraci" Style="{StaticResource VlcSlider}" Minimum="0" Maximum="100" Value="0"
-                                VerticalAlignment="Center"
-                                ValueChanged="ZamanKaydiraci_ValueChanged"
-                                PreviewMouseLeftButtonDown="ZamanKaydiraci_PreviewMouseLeftButtonDown"
-                                PreviewMouseLeftButtonUp="ZamanKaydiraci_PreviewMouseLeftButtonUp"
-                                KeyUp="ZamanKaydiraci_KeyUp"/>
-                    </DockPanel>
-
-                    <!-- Alt Kontroller: Oynat, ±10 sn, Hız, Ses, Tam Ekran -->
-                    <DockPanel LastChildFill="False">
-                        <!-- Oynat / Duraklat -->
-                        <Button x:Name="OynatDuraklatDugmesi" Style="{StaticResource BirincilDugme}" Content="▶ Oynat" Width="84" Padding="8,5"
-                                Click="OynatDuraklat_Click" Margin="0,0,6,0" FontWeight="SemiBold"/>
-
-                        <!-- ±10 sn Atlama -->
-                        <Button x:Name="GeriOnSnDugmesi" Content="-10 sn" Width="60" Padding="6,5"
-                                Click="GeriOnSn_Click" Margin="0,0,4,0"/>
-                        <Button x:Name="IleriOnSnDugmesi" Content="+10 sn" Width="60" Padding="6,5"
-                                Click="IleriOnSn_Click" Margin="0,0,12,0"/>
-
-                        <!-- Hız Seçici (0.5, 0.75, 1, 1.25, 1.5, 2) -->
-                        <TextBlock Text="Hız:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource SolukMetinFircasi}"/>
-                        <ComboBox x:Name="HizSecici" Width="74" Margin="0,0,14,0"
-                                  SelectionChanged="HizSecici_SelectionChanged">
-                            <ComboBoxItem Content="0.5×" Tag="0.5"/>
-                            <ComboBoxItem Content="0.75×" Tag="0.75"/>
-                            <ComboBoxItem Content="1.0×" Tag="1.0" IsSelected="True"/>
-                            <ComboBoxItem Content="1.25×" Tag="1.25"/>
-                            <ComboBoxItem Content="1.5×" Tag="1.5"/>
-                            <ComboBoxItem Content="2.0×" Tag="2.0"/>
-                        </ComboBox>
-
-                        <!-- Ses Kontrolü -->
-                        <TextBlock Text="Ses:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource SolukMetinFircasi}"/>
-                        <Slider x:Name="SesKaydiraci" Style="{StaticResource VlcSlider}" Minimum="0" Maximum="100" Value="100" Width="80"
-                                VerticalAlignment="Center" Margin="0,0,4,0" ValueChanged="SesKaydiraci_ValueChanged"/>
-                        <TextBlock x:Name="SesMetni" Text="%100" Width="38" VerticalAlignment="Center" Foreground="{DynamicResource SolukMetinFircasi}"/>
-
-                        <!-- Tam Ekran (F11/Esc) -->
-                        <Button x:Name="TamEkranDugmesi" DockPanel.Dock="Right" Content="⛶ Tam Ekran" Padding="10,5"
-                                Click="TamEkran_Click" Margin="6,0,0,0"/>
-                    </DockPanel>
-                </StackPanel>
-            </Border>
+            <kontroller:VlcKontrolCubugu x:Name="Kontrol" Grid.Row="1" Margin="0,6,0,0"/>
         </Grid>
 
         <!-- Bölücü (GridSplitter) -->

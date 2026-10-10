@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -21,6 +20,7 @@ public partial class OynaticiPenceresi : Window
 {
     private readonly LibVlcOynatici _oynatici;
     private readonly DispatcherTimer _zamanlayici;
+    private readonly DispatcherTimer _tamEkranKontrolZamanlayici;
     private readonly List<EfektifSegment> _efektifSegmentler = [];
     private readonly ObservableCollection<TranskriptSatirGorunumu> _goruntulenenSegmentler = [];
 
@@ -28,7 +28,6 @@ public partial class OynaticiPenceresi : Window
     private EfektifSegment? _oncekiAktifSegment;
     private bool _videoVar;
     private bool _tamEkran;
-    private bool _kaydiracSurukleniyor;
     private bool _programatikSecimYapiliyor;
     private double _toplamSureSn;
     private bool _kapatildi;
@@ -76,6 +75,9 @@ public partial class OynaticiPenceresi : Window
         Title = !string.IsNullOrWhiteSpace(Kayit.Ad) ? $"Oynatıcı - {Kayit.Ad}" : "Oynatıcı";
 
         _oynatici = new LibVlcOynatici();
+        Kontrol.Oynatici = _oynatici;
+        Kontrol.OynatDuraklatIstendi += (_, _) => OynatDuraklat();
+        Kontrol.TamEkranIstendi += (_, _) => TamEkranGecis();
         VideoGosterici.MediaPlayer = _oynatici.MediaPlayer;
 
         TranskriptListesi.ItemsSource = _goruntulenenSegmentler;
@@ -98,6 +100,12 @@ public partial class OynaticiPenceresi : Window
             Interval = TimeSpan.FromSeconds(30)
         };
         _yoklamaZamanlayici.Tick += YoklamaZamanlayici_Tick;
+        _tamEkranKontrolZamanlayici = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.5) };
+        _tamEkranKontrolZamanlayici.Tick += (_, _) =>
+        {
+            _tamEkranKontrolZamanlayici.Stop();
+            if (_tamEkran) Kontrol.Visibility = Visibility.Collapsed;
+        };
 
         // Transkript ve videoyu yükle
         TranskriptiYukle();
@@ -150,8 +158,7 @@ public partial class OynaticiPenceresi : Window
                 if (sonSn > 0)
                 {
                     _toplamSureSn = sonSn;
-                    ZamanKaydiraci.Maximum = sonSn;
-                    ZamanMetni.Text = $"{ZamanBicim.Bicimle(0)} / {ZamanBicim.Bicimle(sonSn)}";
+                    Kontrol.ZamanBilgisiniGuncelle(0, sonSn);
                 }
             }
         }
@@ -215,13 +222,7 @@ public partial class OynaticiPenceresi : Window
             VideoUyariKutusu.Visibility = Visibility.Visible;
             VideoGosterici.Visibility = Visibility.Collapsed;
 
-            OynatDuraklatDugmesi.IsEnabled = false;
-            GeriOnSnDugmesi.IsEnabled = false;
-            IleriOnSnDugmesi.IsEnabled = false;
-            ZamanKaydiraci.IsEnabled = false;
-            HizSecici.IsEnabled = false;
-            SesKaydiraci.IsEnabled = false;
-            TamEkranDugmesi.IsEnabled = false;
+            Kontrol.IsEnabled = false;
             return;
         }
 
@@ -252,15 +253,13 @@ public partial class OynaticiPenceresi : Window
                     if (sure > 0)
                     {
                         _toplamSureSn = sure;
-                        ZamanKaydiraci.Maximum = sure;
-                        ZamanMetni.Text = $"{ZamanBicim.Bicimle(_oynatici.Zaman)} / {ZamanBicim.Bicimle(sure)}";
+                        _toplamSureSn = sure;
                     }
                 });
             };
 
             // Oynatmaya başla
             _oynatici.MediaPlayer.Play();
-            OynatDuraklatDugmesi.Content = "⏸ Duraklat";
 
             // Belirtilen saniyeye atla
             if (baslatmaSn > 0)
@@ -285,13 +284,7 @@ public partial class OynaticiPenceresi : Window
             VideoUyariKutusu.Visibility = Visibility.Visible;
             VideoGosterici.Visibility = Visibility.Collapsed;
 
-            OynatDuraklatDugmesi.IsEnabled = false;
-            GeriOnSnDugmesi.IsEnabled = false;
-            IleriOnSnDugmesi.IsEnabled = false;
-            ZamanKaydiraci.IsEnabled = false;
-            HizSecici.IsEnabled = false;
-            SesKaydiraci.IsEnabled = false;
-            TamEkranDugmesi.IsEnabled = false;
+            Kontrol.IsEnabled = false;
         }
     }
 
@@ -340,34 +333,19 @@ public partial class OynaticiPenceresi : Window
     {
         if (_kapatildi) return;
 
-        double anlikSn = _videoVar ? _oynatici.Zaman : ZamanKaydiraci.Value;
+        double anlikSn = _videoVar ? _oynatici.Zaman : Kontrol.AramaZamani;
         double toplamSn = _toplamSureSn > 0
             ? _toplamSureSn
-            : (_videoVar ? _oynatici.ToplamSure : ZamanKaydiraci.Maximum);
+            : (_videoVar ? _oynatici.ToplamSure : Kontrol.AramaAzami);
 
-        if (toplamSn > 0 && Math.Abs(ZamanKaydiraci.Maximum - toplamSn) > 0.5)
+        if (toplamSn > 0 && Math.Abs(Kontrol.AramaAzami - toplamSn) > 0.5)
         {
             _toplamSureSn = toplamSn;
-            ZamanKaydiraci.Maximum = toplamSn;
         }
 
-        if (!_kaydiracSurukleniyor)
+        if (!_videoVar && !Kontrol.AramaSurukleniyor)
         {
-            ZamanKaydiraci.Value = Math.Clamp(anlikSn, 0, ZamanKaydiraci.Maximum);
-            ZamanMetni.Text = $"{ZamanBicim.Bicimle(anlikSn)} / {ZamanBicim.Bicimle(ZamanKaydiraci.Maximum)}";
-        }
-
-        // Oynat/duraklat düğme metnini güncelle
-        if (_videoVar)
-        {
-            if (_oynatici.Oynatiliyor && (string)OynatDuraklatDugmesi.Content != "⏸ Duraklat")
-            {
-                OynatDuraklatDugmesi.Content = "⏸ Duraklat";
-            }
-            else if (!_oynatici.Oynatiliyor && (string)OynatDuraklatDugmesi.Content != "▶ Oynat")
-            {
-                OynatDuraklatDugmesi.Content = "▶ Oynat";
-            }
+            Kontrol.ZamanBilgisiniGuncelle(anlikSn, toplamSn);
         }
 
         // Aktif segmenti bul ve vurgula
@@ -422,109 +400,21 @@ public partial class OynaticiPenceresi : Window
             : $"{_goruntulenenSegmentler.Count} / {_efektifSegmentler.Count} segment bulundu";
     }
 
-    /// <summary>
-    /// Oynat / duraklat düğmesi tıklama eylemi.
-    /// </summary>
-    private void OynatDuraklat_Click(object sender, RoutedEventArgs e)
-    {
-        OynatDuraklat();
-    }
-
     private void OynatDuraklat()
     {
         if (!_videoVar) return;
 
-        _oynatici.OynatDuraklat();
-        OynatDuraklatDugmesi.Content = _oynatici.Oynatiliyor ? "⏸ Duraklat" : "▶ Oynat";
-    }
-
-    /// <summary>
-    /// -10 saniye atlama.
-    /// </summary>
-    private void GeriOnSn_Click(object sender, RoutedEventArgs e)
-    {
-        ZamanAtla(-10.0);
-    }
-
-    /// <summary>
-    /// +10 saniye atlama.
-    /// </summary>
-    private void IleriOnSn_Click(object sender, RoutedEventArgs e)
-    {
-        ZamanAtla(10.0);
+        Kontrol.Oynatici?.OynatDuraklat();
     }
 
     private void ZamanAtla(double deltaSn)
     {
-        if (!_videoVar) return;
+        if (!_videoVar || Kontrol.Oynatici is not { } oynatici) return;
 
-        double simdi = _oynatici.Zaman;
-        double azami = _toplamSureSn > 0 ? _toplamSureSn : _oynatici.ToplamSure;
+        double simdi = oynatici.Zaman;
+        double azami = _toplamSureSn > 0 ? _toplamSureSn : oynatici.ToplamSure;
         double hedef = OynaticiYardimcisi.ZamanAtla(simdi, deltaSn, azami);
-        _oynatici.Ara(hedef);
-        ZamanKaydiraci.Value = hedef;
-    }
-
-    /// <summary>
-    /// Hız seçimi değiştiğinde LibVLC oynatıcı hızını günceller.
-    /// </summary>
-    private void HizSecici_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_oynatici == null) return; // InitializeComponent sırasında ilk seçim olayı erken tetiklenir
-        if (HizSecici.SelectedItem is ComboBoxItem item &&
-            double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out double hiz))
-        {
-            _oynatici.Hiz = hiz;
-        }
-    }
-
-    /// <summary>
-    /// Ses kaydıracı değiştiğinde ses seviyesini günceller.
-    /// </summary>
-    private void SesKaydiraci_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (_oynatici != null)
-        {
-            int seviye = (int)Math.Round(e.NewValue);
-            _oynatici.SesSeviyesi = seviye;
-            if (SesMetni != null)
-            {
-                SesMetni.Text = $"%{seviye}";
-            }
-        }
-    }
-
-    /// <summary>
-    /// İlerleme çubuğu sürükleme ve tıklama eylemleri.
-    /// </summary>
-    private void ZamanKaydiraci_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (_kaydiracSurukleniyor && _videoVar)
-        {
-            ZamanMetni.Text = $"{ZamanBicim.Bicimle(e.NewValue)} / {ZamanBicim.Bicimle(ZamanKaydiraci.Maximum)}";
-        }
-    }
-
-    private void ZamanKaydiraci_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        _kaydiracSurukleniyor = true;
-    }
-
-    private void ZamanKaydiraci_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        _kaydiracSurukleniyor = false;
-        if (_videoVar)
-        {
-            _oynatici.Ara(ZamanKaydiraci.Value);
-        }
-    }
-
-    private void ZamanKaydiraci_KeyUp(object sender, KeyEventArgs e)
-    {
-        if (_videoVar)
-        {
-            _oynatici.Ara(ZamanKaydiraci.Value);
-        }
+        oynatici.Ara(hedef);
     }
 
     /// <summary>
@@ -574,22 +464,15 @@ public partial class OynaticiPenceresi : Window
 
             if (_videoVar)
             {
-                _oynatici.Ara(satir.Segment.Bas);
+                Kontrol.Oynatici?.Ara(satir.Segment.Bas);
             }
             else
             {
-                ZamanKaydiraci.Value = Math.Clamp(satir.Segment.Bas, 0, ZamanKaydiraci.Maximum);
-                ZamanMetni.Text = $"{ZamanBicim.Bicimle(satir.Segment.Bas)} / {ZamanBicim.Bicimle(ZamanKaydiraci.Maximum)}";
+                Kontrol.ZamanBilgisiniGuncelle(
+                    Math.Clamp(satir.Segment.Bas, 0, Kontrol.AramaAzami),
+                    Kontrol.AramaAzami);
             }
         }
-    }
-
-    /// <summary>
-    /// Tam ekran moduna geçiş veya tam ekrandan çıkış.
-    /// </summary>
-    private void TamEkran_Click(object sender, RoutedEventArgs e)
-    {
-        TamEkranGecis();
     }
 
     private void TamEkranGecis()
@@ -621,7 +504,9 @@ public partial class OynaticiPenceresi : Window
         GridSplitterBolucu.Visibility = Visibility.Collapsed;
         TranskriptPaneli.Visibility = Visibility.Collapsed;
 
-        TamEkranDugmesi.Content = "🗗 Pencere";
+        Kontrol.Visibility = Visibility.Visible;
+        Kontrol.TamEkranDurumunuGuncelle(true);
+        TamEkranKontrolleriniGizlemeZamanlayicisiniBaslat();
 
         // Tam ekranda efektif metinden geçici .srt üretip seçili altyazı olarak ekle
         AltyaziyiTamEkranaYukle();
@@ -639,7 +524,9 @@ public partial class OynaticiPenceresi : Window
         GridSplitterBolucu.Visibility = Visibility.Visible;
         TranskriptPaneli.Visibility = Visibility.Visible;
 
-        TamEkranDugmesi.Content = "⛶ Tam Ekran";
+        _tamEkranKontrolZamanlayici.Stop();
+        Kontrol.Visibility = Visibility.Visible;
+        Kontrol.TamEkranDurumunuGuncelle(false);
 
         // Pencere modunda altyazı video üstüne çizilmez
         try
@@ -695,10 +582,56 @@ public partial class OynaticiPenceresi : Window
             {
                 File.Delete(eskiYol);
             }
+
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Eski altyazı dosyası silinemedi: {ex.Message}");
+        }
+    }
+
+    private void VideoAlani_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount > 1)
+        {
+            TamEkranGecis();
+        }
+        else
+        {
+            OynatDuraklat();
+        }
+
+        e.Handled = true;
+    }
+
+    private void VideoAlani_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Kontrol.Oynatici is { } oynatici)
+        {
+            oynatici.SesSeviyesi = Math.Clamp(oynatici.SesSeviyesi + Math.Sign(e.Delta) * 5, 0, 100);
+        }
+        e.Handled = true;
+    }
+
+    private void Pencere_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_tamEkran && Kontrol.Visibility != Visibility.Visible)
+        {
+            Kontrol.Visibility = Visibility.Visible;
+        }
+
+        if (_tamEkran)
+        {
+            TamEkranKontrolleriniGizlemeZamanlayicisiniBaslat();
+        }
+    }
+
+    private void TamEkranKontrolleriniGizlemeZamanlayicisiniBaslat()
+    {
+        _tamEkranKontrolZamanlayici.Stop();
+        if (_tamEkran)
+        {
+            _tamEkranKontrolZamanlayici.Start();
         }
     }
 
@@ -751,6 +684,7 @@ public partial class OynaticiPenceresi : Window
 
         _zamanlayici.Stop();
         _yoklamaZamanlayici.Stop();
+        _tamEkranKontrolZamanlayici.Stop();
 
         try
         {

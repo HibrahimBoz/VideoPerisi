@@ -54,8 +54,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         ArgumentNullException.ThrowIfNull(ders);
         _aramaMotoru = aramaMotoru;
         InitializeComponent();
-        Core.Initialize();
-        _libVlc = new LibVLC();
+        _libVlc = LibVlcAyarlari.Olustur();
         _saat = new CokAciliSaat(ders);
         _saat.Ara(baslangicSanalSn);
         _sureSn = Math.Max(0, ders.ToplamSureSn);
@@ -135,7 +134,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         _zamanlayici.Start();
         if (_saat.Oynatiliyor)
         {
-            OynatDurdurDugmesi.Content = "Duraklat";
+            OynatDurdurDugmesi.Content = "\uE769";
         }
     }
 
@@ -809,7 +808,7 @@ public partial class CokAciliOynaticiPenceresi : Window
         {
             _saat.Duraklat();
             foreach (var state in _kanallar.Values) state.Oynatici.Pause();
-            OynatDurdurDugmesi.Content = "Oynat";
+            OynatDurdurDugmesi.Content = "\uE768";
         }
         else
         {
@@ -819,7 +818,7 @@ public partial class CokAciliOynaticiPenceresi : Window
             {
                 if (state.GriKutusu.Visibility != Visibility.Visible) state.Oynatici.Play();
             }
-            OynatDurdurDugmesi.Content = "Duraklat";
+            OynatDurdurDugmesi.Content = "\uE769";
         }
     }
 

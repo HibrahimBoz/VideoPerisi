@@ -17,6 +17,9 @@ public partial class VlcKontrolCubugu : UserControl
     private readonly DispatcherTimer _zamanlayici;
     private bool _surukleniyor;
     private bool _programatikGuncelleme;
+    private bool _hariciZamanKullaniliyor;
+    private double _hariciZaman;
+    private double _hariciToplamSure;
     private string _seciliEnBoyOrani = "Varsayılan";
     private string? _seciliEkolayzer;
 
@@ -29,6 +32,24 @@ public partial class VlcKontrolCubugu : UserControl
         set => SetValue(OynaticiProperty, value);
     }
 
+    public bool AramaSurukleniyor => _surukleniyor;
+    public double AramaZamani => AramaKaydiraci.Value;
+    public double AramaAzami => AramaKaydiraci.Maximum;
+
+    public void TamEkranDurumunuGuncelle(bool tamEkran)
+    {
+        TamEkranDugmesi.Content = tamEkran ? "\uE73F" : "\uE740";
+        TamEkranDugmesi.ToolTip = tamEkran ? "Pencereli görünüm" : "Tam ekran";
+    }
+
+    public void ZamanBilgisiniGuncelle(double zaman, double toplamSure)
+    {
+        _hariciZamanKullaniliyor = true;
+        _hariciZaman = Math.Max(0, zaman);
+        _hariciToplamSure = Math.Max(0, toplamSure);
+        Guncelle();
+    }
+
     public VlcKontrolCubugu()
     {
         InitializeComponent();
@@ -38,13 +59,14 @@ public partial class VlcKontrolCubugu : UserControl
 
     private static void OynaticiDegisti(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((VlcKontrolCubugu)d).Guncelle();
+        VlcKontrolCubugu kontrol = (VlcKontrolCubugu)d;
+        kontrol._hariciZamanKullaniliyor = false;
+        kontrol.Guncelle();
     }
 
     private void KontrolCubugu_Loaded(object sender, RoutedEventArgs e)
     {
         UygulamaTemasiniUygula();
-        Focus();
         _zamanlayici.Start();
         Guncelle();
     }
@@ -74,6 +96,21 @@ public partial class VlcKontrolCubugu : UserControl
         _programatikGuncelleme = true;
         try
         {
+            if (_hariciZamanKullaniliyor)
+            {
+                double disToplam = Math.Max(0, _hariciToplamSure);
+                double disZaman = Math.Clamp(_hariciZaman, 0, disToplam > 0 ? disToplam : double.MaxValue);
+                AramaKaydiraci.Maximum = Math.Max(1, disToplam);
+                if (!_surukleniyor)
+                {
+                    AramaKaydiraci.Value = Math.Min(disZaman, AramaKaydiraci.Maximum);
+                }
+
+                GecenSure.Text = SureBiçimle(disZaman);
+                KalanSure.Text = $"{SureBiçimle(Math.Max(0, disToplam - disZaman))} / {SureBiçimle(disToplam)}";
+                return;
+            }
+
             if (oynatici is null)
             {
                 AramaKaydiraci.Value = 0;
@@ -372,15 +409,6 @@ public partial class VlcKontrolCubugu : UserControl
     {
         switch (e.Key)
         {
-            case Key.Space:
-                OynatDuraklat_Click(this, new RoutedEventArgs());
-                break;
-            case Key.Left:
-                ZamanAtla(-5);
-                break;
-            case Key.Right:
-                ZamanAtla(5);
-                break;
             case Key.Up:
                 if (Oynatici is { } yukari) yukari.SesSeviyesi = Math.Min(100, yukari.SesSeviyesi + 5);
                 Guncelle();
