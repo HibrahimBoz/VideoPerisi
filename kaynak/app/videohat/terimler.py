@@ -89,7 +89,7 @@ def duzelt_metin(metin: str, tm: Terimler, _onbellek: dict | None = None) -> tup
     """Kesin kurallar, sonra temkinli bulanık eşleştirme. (yeni_metin, düzeltme_sayısı)"""
     sayi = 0
     for desen, dogru in tm.kurallar:
-        metin, n = desen.subn(dogru, metin)
+        metin, n = desen.subn(lambda _m, d=dogru: d, metin)
         sayi += n
     if _onbellek is None:
         _onbellek = {}

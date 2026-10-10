@@ -13,7 +13,24 @@ class SttAyar:
     cpu_model: str = "medium"
     beam_size: int = 5
     vad: bool = True
+    vad_max_konusma_sn: float = 20.0
+    vad_bosluk_ms: int = 500
+    vad_konusma_pad_ms: int = 400
+    halusinasyon_esik_sn: float = 2.0
+    guven_esik: float = 0.45
+    guven_kisa_esik: float = 0.30
     terimler_dosyasi: str = "terimler.txt"
+    baglam_tasi: bool = True
+    ikinci_gecis: bool = True
+    ikinci_gecis_esik: float = 0.60
+    ikinci_gecis_en_cok_oran: float = 0.25
+    parca_siniri_tekrar_temizle: bool = True
+    kisa_altyazi_uzat: bool = True
+    bosluk_doldur: bool = True
+    bosluk_min_sn: float = 30.0
+    bosluk_aktif_orani: float = 0.40
+    bosluk_enerji_db: float = 3.0
+    bosluk_en_cok_oran: float = 1.0
 
 
 @dataclass

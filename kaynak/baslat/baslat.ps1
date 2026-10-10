@@ -103,6 +103,7 @@ while ($true) {
     Write-Host '  5) Kendi kendine test (ilk çalıştırmada önerilir)'
     Write-Host '  6) Kullanım kılavuzunu aç'
     Write-Host '  7) NVIDIA ekran kartı sürücüsünü kur (yalnız gerekirse; yönetici izni ister)'
+    Write-Host '  8) Çok kameralı grup ders klasörü işle (senkron + ders.json)'
     Write-Host '  0) Çıkış'
     Write-Host ''
     $s = Read-Host 'Seçiminiz'
@@ -130,6 +131,28 @@ while ($true) {
                 if ($sv) { Write-Host "Kurulu sürücü: $sv" -ForegroundColor Gray } else { Write-Host 'Kurulu NVIDIA sürücüsü bulunamadı.' -ForegroundColor Yellow }
                 Write-Host 'Kurulum Windows''un yönetici onayını (UAC) ister ve ekranı birkaç kez yeniler; bittikten sonra bilgisayarı yeniden başlatın.' -ForegroundColor Yellow
                 if (Evet-Mi 'Sürücü kurulum programı başlatılsın mı?' 'h') { Start-Process -FilePath $surucuDosya.FullName }
+            }
+            Read-Host 'Devam için Enter' | Out-Null
+        }
+        '8' {
+            $k = Klasor-Sec
+            if ($k.Count) {
+                $klasor = $k[0]
+                $agir = Evet-Mi 'Ağır gürültü giderme (çok gürültülü kayıt)?'
+                $goruntu = Evet-Mi 'Görüntü iyileştirme?'
+                $args2 = @('"' + $klasor + '"')
+                if ($agir) { $args2 += '--agir-ses' }
+                if ($goruntu) { $args2 += '--goruntu' }
+                Write-Host ''
+                Write-Host 'Grup işleniyor... (pencereyi kapatmayın; uzun videolar dakikalar sürebilir)' -ForegroundColor Green
+                $grupBat = Join-Path $kok 'grup.bat'
+                if (-not (Test-Path $grupBat)) { $grupBat = Join-Path $kok 'bat\grup.bat' }
+                & $grupBat @args2
+                $kod = $LASTEXITCODE
+                Write-Host ''
+                if ($kod -eq 0) { Write-Host 'BİTTİ. Çıktılar ders klasöründe (<ad>_videoperisi\ders.json).' -ForegroundColor Green }
+                else { Write-Host "Hata oluştu (kod $kod). Ayrıntı: $kok\is\gunluk" -ForegroundColor Red }
+                if ($kod -eq 0 -and $klasor -and -not $Dosya) { Start-Process explorer.exe -ArgumentList ('"' + $klasor + '"') }
             }
             Read-Host 'Devam için Enter' | Out-Null
         }

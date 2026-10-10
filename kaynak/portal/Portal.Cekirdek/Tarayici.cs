@@ -94,7 +94,19 @@ public static class Tarayici
 
     private static void KayitEkle(string ad, string klasorYolu, string jsonYolu, List<DersKaydi> sonuclar)
     {
-        string islenmisMp4 = Path.Combine(klasorYolu, $"{ad}_islenmis.mp4");
+        // Kimlik JsonYolu (normalize tam yol). Ad yalnız görünen ad; aynı adlı dersler birbirini ezmez.
+        string klasorTam = DersKaydi.YoluNormalizeEt(klasorYolu);
+        string jsonTam = DersKaydi.YoluNormalizeEt(jsonYolu);
+        if (string.IsNullOrEmpty(klasorTam))
+        {
+            klasorTam = klasorYolu;
+        }
+        if (string.IsNullOrEmpty(jsonTam))
+        {
+            jsonTam = jsonYolu;
+        }
+
+        string islenmisMp4 = Path.Combine(klasorTam, $"{ad}_islenmis.mp4");
         string? videoYolu = null;
 
         // 1. Öncelik: aynı klasörde <ad>_islenmis.mp4
@@ -105,7 +117,7 @@ public static class Tarayici
         else
         {
             // 2. Öncelik: _videoperisi klasörünün üstünde <ad>.* video uzantılarından ilki (.mp4 .mkv .mov .avi)
-            string? ustKlasor = Path.GetDirectoryName(klasorYolu);
+            string? ustKlasor = Path.GetDirectoryName(klasorTam);
             if (!string.IsNullOrEmpty(ustKlasor) && Directory.Exists(ustKlasor))
             {
                 foreach (var uzanti in VideoUzantilari)
@@ -120,6 +132,6 @@ public static class Tarayici
             }
         }
 
-        sonuclar.Add(new DersKaydi(ad, klasorYolu, jsonYolu, videoYolu));
+        sonuclar.Add(new DersKaydi(ad, klasorTam, jsonTam, videoYolu));
     }
 }

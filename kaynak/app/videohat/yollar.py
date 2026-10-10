@@ -9,7 +9,10 @@ def kok() -> Path:
     """Paket kökü. VIDEOHAT_KOK ortam değişkeni varsa o, yoksa app\\videohat'ın iki üstü."""
     env = os.environ.get("VIDEOHAT_KOK")
     if env:
-        return Path(env.rstrip("\\/ ") or env)
+        k = env.rstrip("\\/ ") or env
+        if len(k) == 2 and k[1] == ":":  # sürücü kökü: "D:" göreli yol olur, "D:\" kalmalı
+            k += "\\"
+        return Path(k)
     return Path(__file__).resolve().parent.parent.parent
 
 

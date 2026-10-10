@@ -62,13 +62,56 @@ def _durum_oku(yol: Path) -> set[str]:
     return kayitlar
 
 
-def _geri_al(isleniyor: Path, gelen: Path) -> None:
-    """Açılışta isleniyor\\'da kalanları gelen\\'e geri koy."""
+def _yetim_silinebilir_mi(klasor: Path) -> bool:
+    """Yalnız içinde hiç çıktı dosyası (.srt/.json/_islenmis.mp4) bulunmayan
+    ya da yarım-iş işaret dosyası taşıyan klasörü sil; çıktı varsa koru."""
+    if not klasor.is_dir():
+        return True
+    for isaret in (".yarim", ".is", f"{klasor.name}.is"):
+        if (klasor / isaret).exists():
+            return True
+    try:
+        for f in klasor.iterdir():
+            if f.is_file():
+                ad = f.name.lower()
+                if ad.endswith((".srt", ".json")) or "_islenmis.mp4" in ad:
+                    return False
+    except OSError:
+        return False
+    return True
+
+
+def _geri_al(isleniyor: Path, gelen: Path, bitti: Path | None = None) -> None:
+    """Açılışta isleniyor\\'da kalanları gelen\\'e geri koy, yetim bitti\\<ad> klasörünü temizle."""
+    if bitti is None:
+        try:
+            bitti = yollar.is_dizini("bitti")
+        except Exception:
+            bitti = isleniyor.parent / "bitti"
     for p in isleniyor.iterdir():
         if p.is_file():
             hedef = _benzersiz(gelen, p.name)
             shutil.move(str(p), str(hedef))
             log.warning("Yarım kalan iş geri alındı: %s", hedef.name)
+            if bitti.exists():
+                adaylar = [bitti / p.stem]
+                n = 1
+                while (bitti / f"{p.stem}_{n}").exists():
+                    adaylar.append(bitti / f"{p.stem}_{n}")
+                    n += 1
+                for yetim in adaylar:
+                    if yetim.exists():
+                        if yetim.is_dir():
+                            if not _yetim_silinebilir_mi(yetim):
+                                log.info("Tamamlanmış çıktı içeren klasör korundu: %s", yetim)
+                                continue
+                            shutil.rmtree(yetim, ignore_errors=True)
+                        else:
+                            try:
+                                yetim.unlink()
+                            except OSError:
+                                pass
+                        log.info("Yetim bitti klasörü temizlendi: %s", yetim)
 
 
 def tek_tur(ayar: Ayar, gorulen: dict[Path, tuple[int, float, int]], bayrak: Bayraklar | None = None) -> int:
@@ -116,9 +159,18 @@ def tek_tur(ayar: Ayar, gorulen: dict[Path, tuple[int, float, int]], bayrak: Bay
         shutil.move(str(p), str(calisan))
         cikis_kok = _benzersiz(bitti, calisan.stem)
         cikis_kok.mkdir(parents=True, exist_ok=True)
+        isaret = cikis_kok / ".yarim"
+        try:
+            isaret.touch()
+        except OSError:
+            pass
         log.info("İş başladı: %s", calisan.name)
         s = isle_tek(calisan, cikis_kok, ayar, bayrak)
         if s.basarili:
+            try:
+                isaret.unlink(missing_ok=True)
+            except OSError:
+                pass
             shutil.move(str(calisan), str(cikis_kok / calisan.name))
             with open(durum_yolu, "a", encoding="utf-8") as f:
                 f.write(json.dumps({"parmak": parmak, "ad": calisan.name,
@@ -140,13 +192,16 @@ def dongu(ayar: Ayar, tur_siniri: int | None = None) -> int:
     """Ctrl+C ile durur. `tur_siniri` yalnız testlerde (belirli tur sayısı sonra çık)."""
     for ad in ("gelen", "isleniyor", "bitti", "hata", "gunluk"):
         yollar.is_dizini(ad)
-    _geri_al(yollar.is_dizini("isleniyor"), yollar.is_dizini("gelen"))
+    _geri_al(yollar.is_dizini("isleniyor"), yollar.is_dizini("gelen"), yollar.is_dizini("bitti"))
     log.info("İzleme başladı: %s (Ctrl+C ile durdurun)", yollar.is_dizini("gelen"))
     gorulen: dict[Path, tuple[int, float, int]] = {}
     tur = 0
     try:
         while tur_siniri is None or tur < tur_siniri:
-            tek_tur(ayar, gorulen)
+            try:
+                tek_tur(ayar, gorulen)
+            except OSError as e:  # disk dolu, antivirüs kilidi: izleyici ölmesin
+                log.error("Tur başarısız, sonraki turda yeniden denenir: %s", e)
             tur += 1
             time.sleep(ayar.izle.yoklama_sn)
     except KeyboardInterrupt:

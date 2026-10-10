@@ -217,7 +217,7 @@ public class IndeksOnbellekTestleri : IDisposable
         // Geçerli JSON ama Dersler alanı null (bozuk önbellek)
         string bozukJson = """
         {
-          "Surum": 1,
+          "Surum": 2,
           "KayitZamaniUtc": "2026-01-01T00:00:00Z",
           "Dersler": null
         }
@@ -241,7 +241,7 @@ public class IndeksOnbellekTestleri : IDisposable
         var tazeVeri = onbellek.Yukle();
         Assert.NotNull(tazeVeri);
         Assert.NotNull(tazeVeri.Dersler);
-        Assert.True(tazeVeri.Dersler.ContainsKey("ders1"));
+        Assert.True(tazeVeri.Dersler.ContainsKey(ders1.IndeksAnahtari));
     }
 
     [Fact]
@@ -308,7 +308,7 @@ public class IndeksOnbellekTestleri : IDisposable
         var onbellek = new IndeksOnbellek(_onbellekDosyasi);
         var veri = new OnbellekVerisi
         {
-            Surum = 1,
+            Surum = IndeksOnbellek.GuncelSurum,
             KayitZamaniUtc = DateTime.UtcNow
         };
 
@@ -320,7 +320,7 @@ public class IndeksOnbellekTestleri : IDisposable
 
         var yuklenen = onbellek.Yukle();
         Assert.NotNull(yuklenen);
-        Assert.Equal(1, yuklenen.Surum);
+        Assert.Equal(IndeksOnbellek.GuncelSurum, yuklenen.Surum);
     }
 
     [Fact]
@@ -343,5 +343,48 @@ public class IndeksOnbellekTestleri : IDisposable
         string dosyaYolu = onbellek.DosyaYoluBelirle();
         Assert.StartsWith(Path.GetFullPath(ozelKlasor), dosyaYolu, StringComparison.OrdinalIgnoreCase);
         Assert.EndsWith(".json", dosyaYolu, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Onbellek_SegmentlerNullElemanIcerirse_DisktenYuklenir_IndekslemeBasarili()
+    {
+        var ders1 = OrnekDersDosyasiOlustur("ders1");
+        var dersler = new[] { ders1 };
+
+        // Geçerli JSON ve Sürüm 2, ancak Segmentler listesinde null eleman var: [ null ]
+        string bozukSegmentliJson = """
+        {
+          "Surum": 2,
+          "KayitZamaniUtc": "2026-01-01T00:00:00Z",
+          "Dersler": {
+            "ders1": {
+              "DersAd": "ders1",
+              "JsonYolu": "ornek.json",
+              "Anahtar": {
+                "JsonZamanUtcTicks": 0,
+                "JsonBoyut": 0,
+                "DuzeltmeSayisi": 0,
+                "DuzeltmeEnYeniUtcTicks": 0
+              },
+              "Segmentler": [
+                null
+              ]
+            }
+          }
+        }
+        """;
+        File.WriteAllText(_onbellekDosyasi, bozukSegmentliJson);
+
+        var onbellek = new IndeksOnbellek(_onbellekDosyasi);
+
+        using var motor = new MetinAramaMotoru(onbellek);
+        // NullReferenceException ile düşmemeli, bozuk ders önbelleğini atıp diskten yüklemeli
+        await motor.IndeksleAsync(dersler);
+
+        Assert.Equal(1, motor.DiskOkumaSayisi);
+        Assert.Equal(0, motor.AtlananDersSayisi);
+
+        var sonuclar = motor.Ara("ders1");
+        Assert.Single(sonuclar);
     }
 }

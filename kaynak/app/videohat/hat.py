@@ -53,7 +53,7 @@ def _ses_akisi_var(video: Path) -> bool:
             creationflags=_penceresiz(),
         )
         return bool(sonuc.stdout.strip())
-    except Exception:
+    except subprocess.CalledProcessError:
         return False
 
 
@@ -66,7 +66,7 @@ def _video_akisi_var(video: Path) -> bool:
             check=True, capture_output=True, text=True, encoding="utf-8",
             errors="replace", creationflags=_penceresiz())
         return bool(sonuc.stdout.strip())
-    except Exception:
+    except subprocess.CalledProcessError:
         return False
 
 
@@ -111,6 +111,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         ham48 = ara / "ham48.wav"
         temiz48 = ara / "temiz48.wav"
         temiz16 = ara / "temiz16.wav"
+        ham16 = ara / "ham16.wav"
 
         def olc(adim: str, islem):
             baslangic = time.perf_counter()
@@ -122,6 +123,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         olc("ses_cikar", lambda: ses.cikar(video, ham48))
         olc("ses_temizle", lambda: ses.temizle(ham48, temiz48, bayraklar.agir_ses, ayar))
         olc("ses_16k", lambda: ses.stt_icin(temiz48, temiz16))
+        olc("ses_16k_ham", lambda: ses.stt_icin(ham48, ham16))
 
         secim = olc(
             "cihaz_sec",
@@ -134,7 +136,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
         def stt_calistir():
             nonlocal secim
             try:
-                return stt_yaz(temiz16, secim, ayar, terimler)
+                return stt_yaz(temiz16, secim, ayar, terimler, wav16_ham=ham16)
             except (RuntimeError, OSError) as hata:
                 mesaj = str(hata).lower()
                 anahtarlar = ("cuda", "cublas", "cudnn", "out of memory", "memory")
@@ -144,7 +146,7 @@ def isle_tek(video: Path, cikis_dir: Path, ayar: Ayar, bayraklar: Bayraklar) -> 
                 cihaz.cuda_kapat()
                 secim = cihaz.sec(ayar, zorla_cihaz="cpu", zorla_model=bayraklar.model)
                 sonuc.cihaz = secim.device
-                return stt_yaz(temiz16, secim, ayar, terimler)
+                return stt_yaz(temiz16, secim, ayar, terimler, wav16_ham=ham16)
 
         from . import stt as stt_mod
         stt_yaz = stt_mod.yaz

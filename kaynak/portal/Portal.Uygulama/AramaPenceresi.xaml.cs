@@ -18,6 +18,8 @@ public partial class AramaPenceresi : Window
 {
     private string _kokKlasor;
     private IAramaMotoru _aramaMotoru;
+    private CancellationTokenSource? _indekslemeCts;
+    private Task? _indekslemeGorevi;
     private readonly DispatcherTimer _aramaZamanlayici;
     private readonly ObservableCollection<DersKaydi> _dersler = [];
     private readonly ObservableCollection<SonucGorunumu> _sonuclar = [];
@@ -59,13 +61,37 @@ public partial class AramaPenceresi : Window
 
     private async Task IndeksleAsync()
     {
+        if (_indekslemeCts != null)
+        {
+            _indekslemeCts.Cancel();
+            if (_indekslemeGorevi != null)
+            {
+                try
+                {
+                    await _indekslemeGorevi;
+                }
+                catch
+                {
+                    // İptal hatasını yut
+                }
+            }
+            _indekslemeCts.Dispose();
+            _indekslemeCts = null;
+        }
+
+        var cts = new CancellationTokenSource();
+        _indekslemeCts = cts;
+        var iptal = cts.Token;
+
         IlerlemeCubugu.Visibility = Visibility.Visible;
         IlerlemeCubugu.Value = 0;
         DurumBilgisi.Text = "Dersler taranıyor...";
 
         try
         {
-            var bulunanlar = await Task.Run(() => Tarayici.Tara(_kokKlasor));
+            var bulunanlar = await Task.Run(() => Tarayici.Tara(_kokKlasor), iptal);
+            iptal.ThrowIfCancellationRequested();
+
             _dersler.Clear();
             foreach (var ders in bulunanlar)
             {
@@ -85,20 +111,46 @@ public partial class AramaPenceresi : Window
             DurumBilgisi.Text = "İndeksleniyor...";
             var ilerleme = new Progress<int>(yuzde =>
             {
-                IlerlemeCubugu.Value = yuzde;
-                DurumBilgisi.Text = $"İndeksleniyor... %{yuzde}";
+                if (iptal.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Dispatcher.Invoke(() =>
+                {
+                    IlerlemeCubugu.Value = yuzde;
+                    DurumBilgisi.Text = $"İndeksleniyor... %{yuzde}";
+                });
             });
 
-            await _aramaMotoru.IndeksleAsync(_dersler, ilerleme);
-            DurumBilgisi.Text = "Hazır";
+            var dersSnapshot = _dersler.ToList();
+            var motor = _aramaMotoru;
+            _indekslemeGorevi = Task.Run(async () => await motor.IndeksleAsync(dersSnapshot, ilerleme, iptal), iptal);
+            await _indekslemeGorevi;
+
+            iptal.ThrowIfCancellationRequested();
+
+            DurumBilgisi.Text = motor.AtlananDersSayisi > 0
+                ? $"{motor.AtlananDersSayisi} ders atlandı"
+                : "Hazır";
+        }
+        catch (OperationCanceledException)
+        {
+            // İptal edildiğinde durumu bozma
         }
         catch (Exception ex)
         {
-            DurumBilgisi.Text = "İndeksleme hatası: " + ex.Message;
+            if (!iptal.IsCancellationRequested)
+            {
+                DurumBilgisi.Text = "İndeksleme hatası: " + ex.Message;
+            }
         }
         finally
         {
-            IlerlemeCubugu.Visibility = Visibility.Collapsed;
+            if (ReferenceEquals(_indekslemeCts, cts))
+            {
+                IlerlemeCubugu.Visibility = Visibility.Collapsed;
+            }
         }
     }
 
@@ -148,6 +200,25 @@ public partial class AramaPenceresi : Window
                 MessageBoxImage.Error
             );
             return;
+        }
+
+        // Devam eden indeksleme varsa iptal et ve tamamlanmasını bekle
+        if (_indekslemeCts != null)
+        {
+            _indekslemeCts.Cancel();
+            if (_indekslemeGorevi != null)
+            {
+                try
+                {
+                    await _indekslemeGorevi;
+                }
+                catch
+                {
+                    // İptal hatasını yut
+                }
+            }
+            _indekslemeCts.Dispose();
+            _indekslemeCts = null;
         }
 
         _kokKlasor = yeniKok;
@@ -320,6 +391,12 @@ public partial class AramaPenceresi : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        if (_indekslemeCts != null)
+        {
+            _indekslemeCts.Cancel();
+            _indekslemeCts.Dispose();
+            _indekslemeCts = null;
+        }
         if (_aramaMotoru is IDisposable disp)
         {
             disp.Dispose();
@@ -393,8 +470,8 @@ public static class VurguYardimcisi
                 var run = new Run(metin.Substring(duzgunBas, son - duzgunBas))
                 {
                     FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(255, 215, 0)),
-                    Background = new SolidColorBrush(Color.FromArgb(80, 255, 215, 0))
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 180, 50)),
+                    Background = new SolidColorBrush(Color.FromArgb(90, 255, 136, 0))
                 };
                 tb.Inlines.Add(run);
                 mevcut = son;

@@ -9,6 +9,8 @@ public class ParolaGecikmeSayaci
     public const int VarsayilanAzamiHataliDeneme = 5;
     public const int VarsayilanKilitSuresiSaniye = 30;
 
+    public static ParolaGecikmeSayaci Paylasilan { get; } = new();
+
     private readonly object _kilit = new();
     private int _hataliDeneme;
     private DateTime _kilitZamaniUtc = DateTime.MinValue;

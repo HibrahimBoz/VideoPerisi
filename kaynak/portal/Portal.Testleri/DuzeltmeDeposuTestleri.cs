@@ -673,4 +673,208 @@ public class DuzeltmeDeposuTestleri : IDisposable
         Assert.Equal(10, sonuc.Segmentler.Count);
         Assert.Empty(sonuc.Yetimler);
     }
+
+    [Fact]
+    public void Birlestir_IkiNullOncekiIdDuzeltme_CakismaAlgilanir()
+    {
+        var transkript = OrnekTranskriptUret();
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // İki kullanıcı dokunulmamış segmenti düzenliyor (ikisinin de OncekiId'si null)
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Merhaba kıymetli arkadaşlar (Kullanıcı 1)",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddSeconds(-20)
+        };
+        var d2 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Merhaba sevgili arkadaşlar (Kullanıcı 2)",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddSeconds(-10)
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+
+        var sonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+
+        Assert.True(sonuc.CakismaVar);
+        Assert.True(sonuc[0].Cakisma);
+        Assert.Equal("Merhaba değerli arkadaşlar", sonuc[0].Metin);
+        Assert.Equal(2, sonuc[0].Gecmis.Count);
+    }
+
+    [Fact]
+    public void Birlestir_CakismaSonrasiCozumKaydi_EtkiliOlurVeRozetKalkar()
+    {
+        var transkript = OrnekTranskriptUret();
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // İki çakışan kayıt
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Kullanıcı 1 Metni",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-10)
+        };
+        var d2 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Kullanıcı 2 Metni",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-5)
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+
+        var ilkSonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        Assert.True(ilkSonuc[0].Cakisma);
+
+        // Çakışma sonrası çözüm kaydı üretilir
+        var cozum = Duzeltme.DuzenlemeOlustur(
+            ilkSonuc[0],
+            transkript.Ad,
+            "Birleştirilmiş Nihai Çözüm",
+            transkript.KaynakOzet);
+
+        Assert.Equal("cozum", cozum.Tur);
+        _depo.Yaz(duzeltmelerKlasoru, cozum);
+
+        var sonSonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+
+        Assert.False(sonSonuc.CakismaVar);
+        Assert.False(sonSonuc[0].Cakisma);
+        Assert.Equal("Birleştirilmiş Nihai Çözüm", sonSonuc[0].Metin);
+        Assert.Equal(3, sonSonuc[0].Gecmis.Count);
+    }
+
+    [Fact]
+    public void Birlestir_CokSeviyeliGeriAl_ADenBveC_IkiGeriAlIleAYaDoner()
+    {
+        var transkript = OrnekTranskriptUret();
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // A -> B
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Metin A",
+            Yeni = "Metin B",
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+
+        // B -> C
+        var d2 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Metin B",
+            Yeni = "Metin C",
+            OncekiId = d1.Id,
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-10)
+        };
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+
+        var durumC = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        Assert.Equal("Metin C", durumC[0].Metin);
+
+        // 1. Geri Al: C -> B
+        var ga1 = Duzeltme.GeriAlKaydiUret(durumC[0].Gecmis);
+        Assert.NotNull(ga1);
+        _depo.Yaz(duzeltmelerKlasoru, ga1);
+
+        var durumB = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        Assert.Equal("Metin B", durumB[0].Metin);
+
+        // 2. Geri Al: B -> A
+        var ga2 = Duzeltme.GeriAlKaydiUret(durumB[0].Gecmis);
+        Assert.NotNull(ga2);
+        _depo.Yaz(duzeltmelerKlasoru, ga2);
+
+        var durumA = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        Assert.Equal("Metin A", durumA[0].Metin);
+        Assert.False(durumA[0].Cakisma);
+        Assert.Equal(4, durumA[0].Gecmis.Count);
+    }
+
+    [Fact]
+    public void Birlestir_CakismaVarken_GeriAlIzinVerilmez_VeKayitUretilmez()
+    {
+        var transkript = OrnekTranskriptUret();
+        string duzeltmelerKlasoru = _depo.HedefKlasor(transkript.Ad);
+
+        // İki çakışan kayıt (ikisinin de OncekiId'si null)
+        var d1 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Kullanıcı 1 Metni",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-10)
+        };
+        var d2 = new Duzeltme
+        {
+            Ders = transkript.Ad,
+            KaynakOzet = transkript.KaynakOzet,
+            SegmentNo = 0,
+            Eski = "Merhaba değerli arkadaşlar",
+            Yeni = "Kullanıcı 2 Metni",
+            OncekiId = null,
+            ZamanUtc = DateTime.UtcNow.AddMinutes(-5)
+        };
+
+        _depo.Yaz(duzeltmelerKlasoru, d1);
+        _depo.Yaz(duzeltmelerKlasoru, d2);
+
+        var sonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        var cakisanSegment = sonuc[0];
+
+        Assert.True(cakisanSegment.Cakisma);
+
+        // Çakışma durumunda GeriAlIzinVerilir false dönmeli
+        Assert.False(Duzeltme.GeriAlIzinVerilir(cakisanSegment));
+        Assert.False(Duzeltme.GeriAlIzinVerilir(cakisanSegment.Gecmis, cakisma: true));
+
+        // Çakışma durumunda GeriAlKaydiUret null dönmeli
+        Assert.Null(Duzeltme.GeriAlKaydiUret(cakisanSegment));
+        Assert.Null(Duzeltme.GeriAlKaydiUret(cakisanSegment.Gecmis, cakisma: true));
+
+        // Çakışma çözüldükten sonra geri almaya izin verilmeli
+        var cozum = Duzeltme.DuzenlemeOlustur(
+            cakisanSegment,
+            transkript.Ad,
+            "Birleşik Çözüm Metni",
+            transkript.KaynakOzet);
+        _depo.Yaz(duzeltmelerKlasoru, cozum);
+
+        var cozulmusSonuc = _depo.Birlestir(transkript, duzeltmelerKlasoru);
+        var cozulmusSegment = cozulmusSonuc[0];
+
+        Assert.False(cozulmusSegment.Cakisma);
+        Assert.True(Duzeltme.GeriAlIzinVerilir(cozulmusSegment));
+        Assert.NotNull(Duzeltme.GeriAlKaydiUret(cozulmusSegment));
+    }
 }

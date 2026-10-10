@@ -3,9 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         xmlns:local="clr-namespace:Portal.Uygulama"
+        Style="{StaticResource PortalPencere}"
         Title="Çok açılı oynatıcı" Width="1280" Height="800"
-        MinWidth="900" MinHeight="560" Background="#17191D"
-        Foreground="#F1F2F4" KeyDown="Pencere_KeyDown"
+        MinWidth="900" MinHeight="560"
+        KeyDown="Pencere_KeyDown"
         Closing="Pencere_Closing">
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -14,13 +15,20 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <WrapPanel Grid.Row="0" Margin="0,0,0,8" VerticalAlignment="Center">
-            <Button Content="Izgara 2×2" Click="Izgara_Click" Margin="0,0,6,4" Padding="10,5"/>
-            <Button Content="Izgara 1×3" Click="UcIzgara_Click" Margin="0,0,6,4" Padding="10,5"/>
-            <Button Content="Izgara 1×2" Click="IkiIzgara_Click" Margin="0,0,6,4" Padding="10,5"/>
-            <Button Content="Odak" Click="Odak_Click" Margin="0,0,6,4" Padding="10,5"/>
-            <Button Content="Tek" Click="Tek_Click" Margin="0,0,14,4" Padding="10,5"/>
-            <TextBlock Text="Ses:" VerticalAlignment="Center" Margin="0,0,5,4"/>
+            <Button Content="&#xE80A;" Style="{StaticResource SimgeDugme}" ToolTip="Izgara 2×2"
+                    Click="Izgara_Click" Margin="0,0,6,4"/>
+            <Button Content="&#xE8A9;" Style="{StaticResource SimgeDugme}" ToolTip="Izgara 1×3"
+                    Click="UcIzgara_Click" Margin="0,0,6,4"/>
+            <Button Content="&#xE9E9;" Style="{StaticResource SimgeDugme}" ToolTip="Izgara 1×2"
+                    Click="IkiIzgara_Click" Margin="0,0,6,4"/>
+            <Button Content="&#xE734;" Style="{StaticResource SimgeDugme}" ToolTip="Odak görünümü"
+                    Click="Odak_Click" Margin="0,0,6,4"/>
+            <Button Content="&#xE8A5;" Style="{StaticResource SimgeDugme}" ToolTip="Tek görünüm"
+                    Click="Tek_Click" Margin="0,0,14,4"/>
+            <TextBlock Text="Ses:" VerticalAlignment="Center" Margin="0,0,5,4" Foreground="{DynamicResource SolukMetinFircasi}"/>
             <ComboBox x:Name="SesKanaliSecici" Width="130" Margin="0,0,12,4"
+                      Foreground="{DynamicResource MetinFircasi}"
+                      Background="{DynamicResource YuzeyFircasi}"
                       SelectionChanged="SesKanaliSecici_SelectionChanged"/>
             <Button Content="Elle hizala" Click="ElleHizala_Click" Margin="0,0,6,4" Padding="10,5"/>
             <Button Content="Ofsetleri dışa aktar" Click="OfsetDisaAktar_Click" Margin="0,0,6,4" Padding="10,5"/>
@@ -33,23 +41,23 @@
                 <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
             <Grid x:Name="VideoIzgarasi" Grid.Column="0" Background="#101114"/>
-            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"/>
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent"/>
             <DockPanel Grid.Column="2" LastChildFill="True" Margin="8,0,0,0">
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <TextBlock Text="Transkript" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="Transkript" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource MetinFircasi}"/>
                     <Button x:Name="DuzenleDugmesi" DockPanel.Dock="Right" Content="Düzenle"
                             Padding="10,4" Click="Duzenle_Click" HorizontalAlignment="Right"/>
                 </DockPanel>
-                <TextBlock x:Name="TranskriptDurumu" DockPanel.Dock="Bottom" Foreground="#B9BEC7"
+                <TextBlock x:Name="TranskriptDurumu" DockPanel.Dock="Bottom" Foreground="{DynamicResource SolukMetinFircasi}"
                            TextWrapping="Wrap" Margin="0,8,0,0"/>
                 <!-- Düzenleme Paneli -->
                 <local:DuzenlemePaneli x:Name="DuzenlemeKontrolu" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,0"/>
-                <ListBox x:Name="TranskriptListesi" Background="#202329" Foreground="#F1F2F4"
+                <ListBox x:Name="TranskriptListesi"
                          BorderThickness="0" SelectionChanged="TranskriptListesi_SelectionChanged"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Gosterim}" TextWrapping="Wrap" Margin="7,5"/>
+                            <TextBlock Text="{Binding Gosterim}" TextWrapping="Wrap" Margin="7,5" Foreground="{DynamicResource MetinFircasi}"/>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -57,11 +65,13 @@
         </Grid>
 
         <DockPanel Grid.Row="2" Margin="0,8,0,0">
-            <Button x:Name="OynatDurdurDugmesi" DockPanel.Dock="Left" Content="Oynat" Click="OynatDurdur_Click"
-                    Margin="0,0,10,0" Padding="12,5"/>
+            <Button x:Name="OynatDurdurDugmesi" Style="{StaticResource VlcOynatDugmesi}" DockPanel.Dock="Left"
+                    Content="&#xE768;" ToolTip="Oynat / Duraklat" Click="OynatDurdur_Click"
+                    Margin="0,0,10,0"/>
             <TextBlock x:Name="ZamanMetni" DockPanel.Dock="Right" Text="00:00 / 00:00"
-                       VerticalAlignment="Center" Margin="10,0,0,0"/>
-            <Slider x:Name="ZamanKaydiraci" Minimum="0" Maximum="1" Value="0"
+                       VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{DynamicResource SolukMetinFircasi}"
+                       FontFamily="Consolas, monospace"/>
+            <Slider x:Name="ZamanKaydiraci" Style="{StaticResource VlcSlider}" Minimum="0" Maximum="1" Value="0"
                     ValueChanged="ZamanKaydiraci_ValueChanged"
                     PreviewMouseLeftButtonUp="ZamanKaydiraci_MouseLeftButtonUp"
                     KeyUp="ZamanKaydiraci_KeyUp"/>
