@@ -4,10 +4,14 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 from videohat.stt import (  # noqa: E402
     Segment, _adaylari_sec, _ikinci_gecis_bolgeleri, _istem_yap,
     _parca_siniri_tekrar_temizle, bolumleri_kes, filtrele_halusinasyonlar,
+    bosluk_bul, bosluk_butcesi_sec, bosluk_ek_filtrele, cakisma_ayikla,
+    enerji_aktif,
 )
 from videohat.ayar import yukle  # noqa: E402
 
@@ -199,6 +203,115 @@ class SttBolmeTesti(unittest.TestCase):
             _istem_yap("eski cümle. Son cümle burada.", "radar"),
             "Son cümle burada. radar",
         )
+
+    def test_enerji_aktif_sentetik_dizi(self):
+        rms = np.array([-70.0, -70.0, -65.0, -60.0, -56.0, -54.0, -45.0, -30.0, -20.0, -10.0])
+        aktif = enerji_aktif(rms, bosluk_enerji_db=8.0)
+        self.assertFalse(aktif[3])
+        self.assertFalse(aktif[4])
+        self.assertTrue(aktif[5])
+        self.assertTrue(aktif[6])
+        self.assertTrue(aktif[7])
+        self.assertEqual(len(enerji_aktif(np.array([]))), 0)
+
+    def test_bosluk_bul_sessiz_ve_aktif_bosluk(self):
+        aktif = np.zeros(100, dtype=bool)
+        aktif[10:30] = True
+        aktif[60:65] = True
+        segmentler = [Segment(40.0, 50.0, "konuşma")]
+        bosluklar = bosluk_bul(segmentler, aktif, toplam_sn=100.0, bosluk_min_sn=30.0, bosluk_aktif_orani=0.40)
+        self.assertEqual(bosluklar, [(0.0, 40.0)])
+
+    def test_bosluk_bul_dosya_basi_ve_sonu(self):
+        aktif = np.ones(160, dtype=bool)
+        segmentler = [Segment(35.0, 45.0, "bir"), Segment(85.0, 95.0, "iki")]
+        bosluklar = bosluk_bul(segmentler, aktif, toplam_sn=160.0, bosluk_min_sn=30.0, bosluk_aktif_orani=0.40)
+        self.assertEqual(bosluklar, [(0.0, 35.0), (45.0, 85.0), (95.0, 160.0)])
+
+    def test_bosluk_bul_kisa_bosluk_atlanir(self):
+        aktif = np.ones(60, dtype=bool)
+        segmentler = [Segment(20.0, 45.0, "konuşma")]
+        bosluklar = bosluk_bul(segmentler, aktif, toplam_sn=60.0, bosluk_min_sn=30.0)
+        self.assertEqual(bosluklar, [])
+
+    def test_ek_filtre_muzik_simgeleri_ve_etiketleri(self):
+        adaylar = [
+            Segment(0.0, 2.0, "🎵", 0.90),
+            Segment(2.0, 4.0, "♪ ♪ ♪", 0.90),
+            Segment(4.0, 6.0, "♫", 0.90),
+            Segment(6.0, 8.0, "[Müzik]", 0.90),
+            Segment(8.0, 10.0, "(müzik)", 0.90),
+            Segment(10.0, 12.0, "Müzik", 0.90),
+            Segment(12.0, 14.0, "alkış", 0.90),
+            Segment(14.0, 16.0, "[Alkış]", 0.90),
+            Segment(16.0, 18.0, "Altyazı M.K.", 0.90),
+            Segment(18.0, 20.0, "Bye bye", 0.90),
+            Segment(20.0, 25.0, "Çalışarak öğreniriz, her güçlüğü yeneriz.", 0.85),
+        ]
+        sonuc = bosluk_ek_filtrele(adaylar)
+        self.assertEqual(len(sonuc), 1)
+        self.assertEqual(sonuc[0].metin, "Çalışarak öğreniriz, her güçlüğü yeneriz.")
+
+    def test_ek_filtre_dongu_atlanir(self):
+        dongu = [
+            Segment(0.0, 1.0, "Tekrar eden metin", 0.80),
+            Segment(1.0, 2.0, "Tekrar eden metin", 0.80),
+            Segment(2.0, 3.0, "Tekrar eden metin", 0.80),
+            Segment(4.0, 6.0, "Gerçek konuşma", 0.85),
+        ]
+        sonuc = bosluk_ek_filtrele(dongu)
+        self.assertEqual([s.metin for s in sonuc], ["Gerçek konuşma"])
+
+        iki_tekrar = [
+            Segment(0.0, 1.0, "Aynı", 0.80),
+            Segment(1.0, 2.0, "Aynı", 0.80),
+        ]
+        self.assertEqual(len(bosluk_ek_filtrele(iki_tekrar)), 2)
+
+    def test_ek_filtre_dusuk_guven_atlanir(self):
+        adaylar = [
+            Segment(0.0, 2.0, "düşük güvenli altyazı", 0.35),
+            Segment(2.0, 4.0, "yüksek güvenli altyazı", 0.65),
+        ]
+        sonuc = bosluk_ek_filtrele(adaylar, guven_esik=0.40)
+        self.assertEqual([s.metin for s in sonuc], ["yüksek güvenli altyazı"])
+
+    def test_cakisma_ayiklama_mevcut_korunur(self):
+        mevcut = [
+            Segment(10.0, 20.0, "Mevcut 1"),
+            Segment(50.0, 60.0, "Mevcut 2"),
+        ]
+        yeni = [
+            Segment(5.0, 12.0, "Çakışan aday 1"),
+            Segment(25.0, 35.0, "Temiz aday 1"),
+            Segment(55.0, 65.0, "Çakışan aday 2"),
+            Segment(70.0, 80.0, "Temiz aday 2"),
+        ]
+        sonuc = cakisma_ayikla(mevcut, yeni)
+        self.assertEqual(
+            [s.metin for s in sonuc],
+            ["Mevcut 1", "Temiz aday 1", "Mevcut 2", "Temiz aday 2"],
+        )
+
+    def test_bosluk_butce_en_uzun_bosluklar_once(self):
+        bosluklar = [
+            (10.0, 40.0),
+            (50.0, 110.0),
+            (120.0, 170.0),
+        ]
+        secilen = bosluk_butcesi_sec(bosluklar, toplam_sn=200.0, en_cok_oran=0.50)
+        self.assertEqual(secilen, [(10.0, 40.0), (50.0, 110.0)])
+
+    def test_eski_ayar_toml_bosluk_doldur_varsayilanlari_alir(self):
+        with tempfile.TemporaryDirectory() as gecici:
+            kok = Path(gecici)
+            (kok / "ayar.toml").write_text("[stt]\nbeam_size = 5\n", encoding="utf-8")
+            ayar = yukle(kok)
+        self.assertTrue(ayar.stt.bosluk_doldur)
+        self.assertEqual(ayar.stt.bosluk_min_sn, 30.0)
+        self.assertEqual(ayar.stt.bosluk_aktif_orani, 0.40)
+        self.assertEqual(ayar.stt.bosluk_enerji_db, 8.0)
+        self.assertEqual(ayar.stt.bosluk_en_cok_oran, 1.0)
 
 
 if __name__ == "__main__":
