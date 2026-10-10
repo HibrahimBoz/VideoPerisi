@@ -27,7 +27,7 @@
     <!-- Birincil Düğme: Turuncu dolgu, beyaz kontrastlı metin -->
     <Style x:Key="BirincilDugme" TargetType="{x:Type Button}">
         <Setter Property="Background" Value="{StaticResource VurguFircasi}"/>
-        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Foreground" Value="#1A1205"/>
         <Setter Property="BorderBrush" Value="{StaticResource VurguFircasi}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
@@ -140,7 +140,7 @@
         <Setter Property="Width" Value="52"/>
         <Setter Property="Height" Value="52"/>
         <Setter Property="Background" Value="{StaticResource VurguFircasi}"/>
-        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Foreground" Value="#1A1205"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="FontFamily" Value="{StaticResource SimgeYaziTipi}"/>
         <Setter Property="FontSize" Value="20"/>
