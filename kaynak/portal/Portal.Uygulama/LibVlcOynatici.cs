@@ -3,6 +3,8 @@ namespace Portal.Uygulama;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using LibVLCSharp.Shared;
 using Portal.Cekirdek;
 
@@ -18,6 +20,7 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
     private long? _aZamaniMs;
     private long? _bZamaniMs;
     private bool _abAtlamaYapiliyor;
+    private long? _oncekiZamanMs;
 
     public static string[] EnBoyOranlari { get; } =
         ["Varsayılan", "16:9", "4:3", "1:1", "16:10", "2.21:1", "2.35:1", "2.39:1", "5:4"];
@@ -81,6 +84,7 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
         MediaPlayer.Stop();
         _aZamaniMs = null;
         _bZamaniMs = null;
+        _oncekiZamanMs = null;
 
         var yeniMedya = new Media(LibVlc, VlcYolu.Hazirla(dosyaYolu), FromType.FromPath);
         MediaPlayer.Media = yeniMedya;
@@ -207,7 +211,15 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
 
     public void EnBoyOraniSec(string oran)
     {
-        try { MediaPlayer.AspectRatio = string.Equals(oran, "Varsayılan", StringComparison.OrdinalIgnoreCase) ? null : oran; }
+        string? libVlcOrani = oran switch
+        {
+            "2.21:1" => "221:100",
+            "2.35:1" => "235:100",
+            "2.39:1" => "239:100",
+            "Varsayılan" => null,
+            _ => oran
+        };
+        try { MediaPlayer.AspectRatio = libVlcOrani; }
         catch { }
     }
 
@@ -306,12 +318,12 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
     {
         try
         {
-            if (_aZamaniMs is null || _bZamaniMs is not null)
+            if (_aZamaniMs is null)
             {
                 _aZamaniMs = Math.Max(0, MediaPlayer.Time);
                 _bZamaniMs = null;
             }
-            else
+            else if (_bZamaniMs is null)
             {
                 long b = Math.Max(0, MediaPlayer.Time);
                 if (b <= _aZamaniMs.Value)
@@ -322,6 +334,11 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
 
                 _bZamaniMs = b;
             }
+            else
+            {
+                _aZamaniMs = null;
+                _bZamaniMs = null;
+            }
         }
         catch { }
     }
@@ -330,11 +347,34 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
     {
         try
         {
-            if (MediaPlayer.IsPlaying)
+            if (!MediaPlayer.IsPlaying)
             {
-                MediaPlayer.Pause();
+                MediaPlayer.NextFrame();
+                return;
             }
-            MediaPlayer.NextFrame();
+
+            MediaPlayer.Pause();
+            _ = DuraklamaSonrasiKareyiIlerle();
+        }
+        catch { }
+    }
+
+    private async Task DuraklamaSonrasiKareyiIlerle()
+    {
+        try
+        {
+            await Task.Delay(100);
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (!_disposed)
+                    {
+                        MediaPlayer.NextFrame();
+                    }
+                }
+                catch { }
+            });
         }
         catch { }
     }
@@ -393,6 +433,12 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
         }
     }
 
+    public bool EkolayzerKapat()
+    {
+        try { return MediaPlayer.UnsetEqualizer(); }
+        catch { return false; }
+    }
+
     private double AyarOku(VideoAdjustOption ayar)
     {
         try
@@ -418,12 +464,31 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
 
     private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
     {
+        long? onceki = _oncekiZamanMs;
+        _oncekiZamanMs = e.Time;
         if (_bZamaniMs is long b && _aZamaniMs is long a && !_abAtlamaYapiliyor && e.Time >= b)
         {
-            _abAtlamaYapiliyor = true;
-            try { Ara(a / 1000.0); }
-            catch { }
-            finally { _abAtlamaYapiliyor = false; }
+            if (onceki is long oncekiZamani && oncekiZamani < b && Math.Abs(e.Time - b) < 750)
+            {
+                _abAtlamaYapiliyor = true;
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try
+                    {
+                        if (!_disposed && _aZamaniMs == a && _bZamaniMs == b)
+                        {
+                            Ara(a / 1000.0);
+                        }
+                    }
+                    catch { }
+                    finally { _abAtlamaYapiliyor = false; }
+                });
+            }
+            else
+            {
+                _aZamaniMs = null;
+                _bZamaniMs = null;
+            }
         }
     }
 
@@ -431,12 +496,18 @@ public sealed class LibVlcOynatici : IOynatici, IDisposable
     {
         if (_dongu)
         {
-            try
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                MediaPlayer.Time = 0;
-                MediaPlayer.Play();
-            }
-            catch { }
+                try
+                {
+                    if (!_disposed && _dongu)
+                    {
+                        MediaPlayer.Time = 0;
+                        MediaPlayer.Play();
+                    }
+                }
+                catch { }
+            });
         }
     }
 

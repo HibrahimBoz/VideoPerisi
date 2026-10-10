@@ -18,6 +18,8 @@ public partial class VlcKontrolCubugu : UserControl
     private bool _surukleniyor;
     private bool _programatikGuncelleme;
     private bool _hariciZamanKullaniliyor;
+    private bool _yuklendi;
+    private bool _oynaticiOlaylarinaAbone;
     private double _hariciZaman;
     private double _hariciToplamSure;
     private string _seciliEnBoyOrani = "Varsayılan";
@@ -60,18 +62,14 @@ public partial class VlcKontrolCubugu : UserControl
     private static void OynaticiDegisti(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         VlcKontrolCubugu kontrol = (VlcKontrolCubugu)d;
-        if (e.OldValue is LibVlcOynatici eskiOynatici)
+        if (kontrol._oynaticiOlaylarinaAbone && e.OldValue is LibVlcOynatici eskiOynatici)
         {
-            eskiOynatici.MediaPlayer.Playing -= kontrol.OynatmaDurumuDegisti;
-            eskiOynatici.MediaPlayer.Paused -= kontrol.OynatmaDurumuDegisti;
-            eskiOynatici.MediaPlayer.Stopped -= kontrol.OynatmaDurumuDegisti;
+            kontrol.OynaticiOlaylarinaAboneOl(eskiOynatici, false);
         }
 
-        if (e.NewValue is LibVlcOynatici yeniOynatici)
+        if (kontrol._yuklendi && e.NewValue is LibVlcOynatici yeniOynatici)
         {
-            yeniOynatici.MediaPlayer.Playing += kontrol.OynatmaDurumuDegisti;
-            yeniOynatici.MediaPlayer.Paused += kontrol.OynatmaDurumuDegisti;
-            yeniOynatici.MediaPlayer.Stopped += kontrol.OynatmaDurumuDegisti;
+            kontrol.OynaticiOlaylarinaAboneOl(yeniOynatici, true);
         }
 
         kontrol._hariciZamanKullaniliyor = false;
@@ -85,12 +83,48 @@ public partial class VlcKontrolCubugu : UserControl
 
     private void KontrolCubugu_Loaded(object sender, RoutedEventArgs e)
     {
+        _yuklendi = true;
+        if (Oynatici is { } oynatici)
+        {
+            OynaticiOlaylarinaAboneOl(oynatici, true);
+        }
         UygulamaTemasiniUygula();
         _zamanlayici.Start();
         Guncelle();
     }
 
-    private void KontrolCubugu_Unloaded(object sender, RoutedEventArgs e) => _zamanlayici.Stop();
+    private void KontrolCubugu_Unloaded(object sender, RoutedEventArgs e)
+    {
+        _yuklendi = false;
+        _zamanlayici.Stop();
+        if (Oynatici is { } oynatici)
+        {
+            OynaticiOlaylarinaAboneOl(oynatici, false);
+        }
+    }
+
+    private void OynaticiOlaylarinaAboneOl(LibVlcOynatici oynatici, bool abone)
+    {
+        if (abone == _oynaticiOlaylarinaAbone)
+        {
+            return;
+        }
+
+        if (abone)
+        {
+            oynatici.MediaPlayer.Playing += OynatmaDurumuDegisti;
+            oynatici.MediaPlayer.Paused += OynatmaDurumuDegisti;
+            oynatici.MediaPlayer.Stopped += OynatmaDurumuDegisti;
+        }
+        else
+        {
+            oynatici.MediaPlayer.Playing -= OynatmaDurumuDegisti;
+            oynatici.MediaPlayer.Paused -= OynatmaDurumuDegisti;
+            oynatici.MediaPlayer.Stopped -= OynatmaDurumuDegisti;
+        }
+
+        _oynaticiOlaylarinaAbone = abone;
+    }
 
     private void UygulamaTemasiniUygula()
     {
@@ -276,6 +310,19 @@ public partial class VlcKontrolCubugu : UserControl
         }
         menu.Items.Add(new Separator());
         MenuItem ekolayzer = new() { Header = "Ekolayzer" };
+        ekolayzer.Items.Add(new MenuItem
+        {
+            Header = "Kapalı",
+            IsCheckable = true,
+            IsChecked = _seciliEkolayzer is null,
+            Command = new RelayCommand(() =>
+            {
+                if (Oynatici?.EkolayzerKapat() == true)
+                {
+                    _seciliEkolayzer = null;
+                }
+            })
+        });
         foreach (string onAyar in Oynatici?.Ekolayzer ?? Array.Empty<string>())
         {
             ekolayzer.Items.Add(new MenuItem
@@ -306,7 +353,8 @@ public partial class VlcKontrolCubugu : UserControl
         ContextMenu menu = new();
         menu.Items.Add(new MenuItem { Header = "Kapalı", IsCheckable = true, IsChecked = Oynatici?.AltyaziParcasi == -1,
             Command = new RelayCommand(() => { if (Oynatici is { } o) o.AltyaziParcasi = -1; }) });
-        foreach ((int id, string ad) in Oynatici?.AltyaziParcalari ?? Array.Empty<(int Id, string Ad)>())
+        foreach ((int id, string ad) in Oynatici?.AltyaziParcalari.Where(parca => parca.Id != -1) ??
+                 Array.Empty<(int Id, string Ad)>())
         {
             menu.Items.Add(ParcaMenusu(ad, id == Oynatici?.AltyaziParcasi,
                 () => { if (Oynatici is { } o) o.AltyaziParcasi = id; }));
@@ -426,9 +474,9 @@ public partial class VlcKontrolCubugu : UserControl
         }
     }
 
-    private void KontrolCubugu_PreviewKeyDown(object sender, KeyEventArgs e)
+    public bool KisayolIsle(Key key)
     {
-        switch (e.Key)
+        switch (key)
         {
             case Key.Up:
                 if (Oynatici is { } yukari) yukari.SesSeviyesi = Math.Min(100, yukari.SesSeviyesi + 5);
@@ -454,9 +502,9 @@ public partial class VlcKontrolCubugu : UserControl
                 HizAyarla(1);
                 break;
             default:
-                return;
+                return false;
         }
-        e.Handled = true;
+        return true;
     }
 
     private void HizAyarla(int yon)

@@ -3,8 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Focusable="True"
              Loaded="KontrolCubugu_Loaded"
-             Unloaded="KontrolCubugu_Unloaded"
-             PreviewKeyDown="KontrolCubugu_PreviewKeyDown">
+             Unloaded="KontrolCubugu_Unloaded">
     <UserControl.Resources>
         <SolidColorBrush x:Key="ArkaPlanFircasi" Color="#16181C" />
         <SolidColorBrush x:Key="YuzeyFircasi" Color="#1E2127" />

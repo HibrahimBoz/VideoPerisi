@@ -25,6 +25,10 @@ public partial class OynaticiPenceresi : Window
     private readonly ObservableCollection<TranskriptSatirGorunumu> _goruntulenenSegmentler = [];
 
     private string? _geciciSrtYolu;
+    private string? _ekliGeciciSrtYolu;
+    private int _ekliGeciciSrtParcaId = -1;
+    private int _tamEkranOncekiSpu = -1;
+    private bool _tamEkranSrtParcasiSecildi;
     private EfektifSegment? _oncekiAktifSegment;
     private bool _videoVar;
     private bool _tamEkran;
@@ -75,6 +79,8 @@ public partial class OynaticiPenceresi : Window
         Title = !string.IsNullOrWhiteSpace(Kayit.Ad) ? $"Oynatıcı - {Kayit.Ad}" : "Oynatıcı";
 
         _oynatici = new LibVlcOynatici();
+        _oynatici.MediaPlayer.EncounteredError += OnMediaPlayerEncounteredError;
+        _oynatici.MediaPlayer.LengthChanged += OnMediaPlayerLengthChanged;
         Kontrol.Oynatici = _oynatici;
         Kontrol.OynatDuraklatIstendi += (_, _) => OynatDuraklat();
         Kontrol.TamEkranIstendi += (_, _) => TamEkranGecis();
@@ -224,30 +230,6 @@ public partial class OynaticiPenceresi : Window
 
             _oynatici.Yukle(videoYolu);
 
-            // Oynatıcı hata dinleyicisi: anlaşılır Türkçe ileti
-            _oynatici.MediaPlayer.EncounteredError += (_, _) =>
-            {
-                Dispatcher.InvokeAsync(() =>
-                {
-                    VideoUyariMetni.Text = "Video oynatılırken bir hata oluştu.";
-                    VideoUyariKutusu.Visibility = Visibility.Visible;
-                });
-            };
-
-            // Uzunluk değiştiğinde süre güncelleme
-            _oynatici.MediaPlayer.LengthChanged += (_, e) =>
-            {
-                Dispatcher.InvokeAsync(() =>
-                {
-                    double sure = e.Length / 1000.0;
-                    if (sure > 0)
-                    {
-                        _toplamSureSn = sure;
-                        Kontrol.OynaticiBilgisiniGuncelle();
-                    }
-                });
-            };
-
             if (baslatmaSn > 0)
             {
                 void OnPlaying(object? s, EventArgs e)
@@ -283,6 +265,28 @@ public partial class OynaticiPenceresi : Window
 
             Kontrol.IsEnabled = false;
         }
+    }
+
+    private void OnMediaPlayerEncounteredError(object? sender, EventArgs e)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            VideoUyariMetni.Text = "Video oynatılırken bir hata oluştu.";
+            VideoUyariKutusu.Visibility = Visibility.Visible;
+        });
+    }
+
+    private void OnMediaPlayerLengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            double sure = e.Length / 1000.0;
+            if (sure > 0)
+            {
+                _toplamSureSn = sure;
+                Kontrol.OynaticiBilgisiniGuncelle();
+            }
+        });
     }
 
     private string? BulVideoYolu()
@@ -485,6 +489,8 @@ public partial class OynaticiPenceresi : Window
     {
         if (_tamEkran) return;
         _tamEkran = true;
+        _tamEkranOncekiSpu = _oynatici.MediaPlayer.Spu;
+        _tamEkranSrtParcasiSecildi = false;
 
         _oncekiWindowState = WindowState;
         _oncekiWindowStyle = WindowStyle;
@@ -522,15 +528,15 @@ public partial class OynaticiPenceresi : Window
         Kontrol.Visibility = Visibility.Visible;
         Kontrol.TamEkranDurumunuGuncelle(false);
 
-        // Pencere modunda altyazı video üstüne çizilmez
-        try
+        if (_tamEkranSrtParcasiSecildi &&
+            _oynatici.MediaPlayer.Spu == _ekliGeciciSrtParcaId)
         {
-            _oynatici.MediaPlayer.SetSpu(-1);
+            int geriYuklenecekSpu = _tamEkranOncekiSpu == _ekliGeciciSrtParcaId
+                ? -1
+                : _tamEkranOncekiSpu;
+            _oynatici.MediaPlayer.SetSpu(geriYuklenecekSpu);
         }
-        catch
-        {
-            // Yut
-        }
+        _tamEkranSrtParcasiSecildi = false;
     }
 
     /// <summary>
@@ -540,21 +546,35 @@ public partial class OynaticiPenceresi : Window
     {
         try
         {
-            if (_oynatici.Medya != null)
+            if (_oynatici.Medya != null && _efektifSegmentler.Count > 0)
             {
-                if (_efektifSegmentler.Count == 0)
+                if (string.IsNullOrEmpty(_geciciSrtYolu) || !File.Exists(_geciciSrtYolu))
                 {
-                    _oynatici.MediaPlayer.SetSpu(-1);
+                    _geciciSrtYolu = SrtUretici.GeciciSrtDosyasiOlustur(_efektifSegmentler);
                 }
-                else
-                {
-                    if (string.IsNullOrEmpty(_geciciSrtYolu) || !File.Exists(_geciciSrtYolu))
-                    {
-                        _geciciSrtYolu = SrtUretici.GeciciSrtDosyasiOlustur(_efektifSegmentler);
-                    }
 
-                    var srtUri = new Uri(_geciciSrtYolu).AbsoluteUri;
-                    _oynatici.MediaPlayer.AddSlave(MediaSlaveType.Subtitle, srtUri, true);
+                if (string.Equals(_geciciSrtYolu, _ekliGeciciSrtYolu, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_ekliGeciciSrtParcaId >= 0)
+                    {
+                        _oynatici.MediaPlayer.SetSpu(_ekliGeciciSrtParcaId);
+                        _tamEkranSrtParcasiSecildi = true;
+                    }
+                    return;
+                }
+
+                if (_tamEkran &&
+                    (!_tamEkranSrtParcasiSecildi || _oynatici.MediaPlayer.Spu != _ekliGeciciSrtParcaId))
+                {
+                    _tamEkranOncekiSpu = _oynatici.MediaPlayer.Spu;
+                }
+
+                var srtUri = new Uri(_geciciSrtYolu).AbsoluteUri;
+                if (_oynatici.MediaPlayer.AddSlave(MediaSlaveType.Subtitle, srtUri, true))
+                {
+                    _ekliGeciciSrtYolu = _geciciSrtYolu;
+                    _ekliGeciciSrtParcaId = _oynatici.MediaPlayer.Spu;
+                    _tamEkranSrtParcasiSecildi = true;
                 }
             }
         }
@@ -671,6 +691,19 @@ public partial class OynaticiPenceresi : Window
         }
     }
 
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase)
+        {
+            return;
+        }
+
+        if (Kontrol.KisayolIsle(e.Key))
+        {
+            e.Handled = true;
+        }
+    }
+
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_kapatildi) return;
@@ -679,6 +712,8 @@ public partial class OynaticiPenceresi : Window
         _zamanlayici.Stop();
         _yoklamaZamanlayici.Stop();
         _tamEkranKontrolZamanlayici.Stop();
+        _oynatici.MediaPlayer.EncounteredError -= OnMediaPlayerEncounteredError;
+        _oynatici.MediaPlayer.LengthChanged -= OnMediaPlayerLengthChanged;
 
         try
         {
